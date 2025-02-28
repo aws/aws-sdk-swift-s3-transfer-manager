@@ -11,7 +11,7 @@ import struct Foundation.Date
 
 /// The synthetic output type for the `downloadObject` operation of `S3TransferManager`.
 ///
-/// Contains all output members from `GetObjectOutput` except `body`. The downloaded object is streamed directly to the `OutputStream` instance specified in the `DownloadObjectInput` instance used to call `downloadObject`.
+/// Contains all output members from `GetObjectOutput` except `body`. The downloaded object is streamed directly to the `OutputStream` instance specified in the `DownloadObjectInput` instance that was used to call `downloadObject`.
 public struct DownloadObjectOutput: TransferOutput {
     /// Indicates that a range of bytes was specified in the request.
     public let acceptRanges: Swift.String?
