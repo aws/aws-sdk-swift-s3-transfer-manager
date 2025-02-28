@@ -1,0 +1,18 @@
+# Finder config files
+.DS_Store
+
+# Swift/SPM config & temp
+.build/
+Package.resolved
+.swiftpm/
+/Packages
+
+# vim temporary files
+*.swp
+
+# VS Code config files
+.vscode/
+
+# Xcode config that is for the installed copy only
+xcuserdata
+DerivedData
