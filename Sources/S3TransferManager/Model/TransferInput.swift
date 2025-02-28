@@ -7,6 +7,6 @@
 
 /// The parent protocol of all synthetic input types used with `S3TransferManager`.
 public protocol TransferInput: Sendable {
-    /// The UUID for the operation; used by `TransferListener` to disambiguate operation calls.
+    /// The unique ID for the operation; can be used to log or identify a specific request.
     var operationID: String { get }
 }

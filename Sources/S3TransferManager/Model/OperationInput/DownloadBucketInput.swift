@@ -39,7 +39,7 @@ public struct DownloadBucketInput: TransferInput {
     ///   - s3Delimiter: Specifies what delimiter is used by the S3 objects you want to download. Objects will be saved to the file location resolved by replacing the specified `s3Delimiter` with system default path separator `"/"`. E.g., if `destination` is `"/dir1"`, `s3Delimiter` is `"-"`, and the key of the S3 object being downloaded is `"dir2-dir3-dir4-file.txt"`, the object will be saved to `"/dir1/dir2/dir3/dir4/file.txt"`.  Default value is `"/"`, which is the system default path separator for all Apple platforms and Linux distros.
     ///   - filter: A closure that allows skipping unwanted S3 objects. Skipped objects do not get downloaded. Default behavior is a closure that just returns `false`, which filters nothing.
     ///   - getObjectRequestCallback: A closure that allows customizing the individual `GetObjectInput` passed to each part or range `getObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `GetObjectInput` without modification.
-    ///   - failurePolicy: A closure that handles `downloadObject` operation failures. Default behavior is `DefaultFailurePolicy.rethrowExceptionToTerminateRequest`, which simply bubbles up the error to the caller and terminates the entire `downloadBucket` operation.
+    ///   - failurePolicy: A closure that handles `downloadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest`, which simply bubbles up the error to the caller and terminates the entire `downloadBucket` operation.
     ///   - transferListeners: An array of `TransferListener`. The transfer status and progress of the operation will be published to each transfer listener provided here via hooks. Default value is an empty array.
     public init(
         bucket: String,
@@ -50,7 +50,7 @@ public struct DownloadBucketInput: TransferInput {
         getObjectRequestCallback: @Sendable @escaping (GetObjectInput) -> GetObjectInput = { input in
             return input
         },
-        failurePolicy: @escaping FailurePolicy = DefaultFailurePolicy.rethrowExceptionToTerminateRequest,
+        failurePolicy: @escaping FailurePolicy = CannedFailurePolicy.rethrowExceptionToTerminateRequest,
         transferListeners: [TransferListener] = []
     ) {
         self.bucket = bucket
