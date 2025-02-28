@@ -13,7 +13,7 @@
 /// After you're done with using the listener, you must explicitly close the underlying stream by calling `closeStream()` on it.
 ///
 /// See README.md for the example usage that consumes `uploadObject` operation's events.
-public class StreamingTransferListener: TransferListener {
+public final class StreamingTransferListener: TransferListener {
     /// The async stream that can be asynchronously iterated on to retrieve the published events.
     public let stream: AsyncThrowingStream<TransferEvent, Error>
 
@@ -151,7 +151,7 @@ public class StreamingTransferListener: TransferListener {
 }
 
 /// The event types of `StreamingTransferListener`.
-public enum TransferEvent {
+public enum TransferEvent: Sendable {
     // `uploadObject` events.
     case uploadObjectInitiated(input: UploadObjectInput, snapshot: SingleObjectTransferProgressSnapshot)
     case uploadObjectBytesTransferred(input: UploadObjectInput, snapshot: SingleObjectTransferProgressSnapshot)

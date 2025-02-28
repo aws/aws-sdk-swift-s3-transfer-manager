@@ -6,4 +6,4 @@
 //
 
 /// The parent protocol of `SingleObjectTransferProgressSnapshot` and `DirectoryTransferProgressSnapshot`.
-public protocol TransferProgressSnapshot {}
+public protocol TransferProgressSnapshot: Sendable {}

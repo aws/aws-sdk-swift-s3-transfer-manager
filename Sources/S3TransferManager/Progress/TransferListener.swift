@@ -12,7 +12,7 @@ import SmithyHTTPAPI
 /// The operations of `S3TransferManager` are "instrumented" with these transfer listener hooks.
 ///
 /// Users can implement custom transfer listeners and provide it via the `transferListeners` argument of the corresponding operation input struct.
-public protocol TransferListener {
+public protocol TransferListener: Sendable {
     /// This method is invoked exactly once per transfer, right after the operation has started.
     func onTransferInitiated(input: TransferInput, snapshot: TransferProgressSnapshot)
 

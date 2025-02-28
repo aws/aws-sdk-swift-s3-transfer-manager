@@ -6,4 +6,4 @@
 //
 
 /// The parent protocol of all synthetic output types used with `S3TransferManager`.
-public protocol TransferOutput {}
+public protocol TransferOutput: Sendable {}

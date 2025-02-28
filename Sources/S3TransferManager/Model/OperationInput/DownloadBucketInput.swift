@@ -17,8 +17,8 @@ public struct DownloadBucketInput: TransferInput {
     public let destination: URL
     public let s3Prefix: String?
     public let s3Delimiter: String
-    public let filter: (S3ClientTypes.Object) -> Bool
-    public let getObjectRequestCallback: (GetObjectInput) -> GetObjectInput
+    public let filter: @Sendable (S3ClientTypes.Object) -> Bool
+    public let getObjectRequestCallback: @Sendable (GetObjectInput) -> GetObjectInput
     public let failurePolicy: FailurePolicy
     public let transferListeners: [TransferListener]
 
@@ -38,8 +38,10 @@ public struct DownloadBucketInput: TransferInput {
         destination: URL,
         s3Prefix: String? = nil,
         s3Delimiter: String = "/",
-        filter: @escaping (S3ClientTypes.Object) -> Bool = { input in return false },
-        getObjectRequestCallback: @escaping (GetObjectInput) -> GetObjectInput = { input in return input },
+        filter: @Sendable @escaping (S3ClientTypes.Object) -> Bool = { input in return false },
+        getObjectRequestCallback: @Sendable @escaping (GetObjectInput) -> GetObjectInput = {
+            input in return input
+        },
         failurePolicy: @escaping FailurePolicy = DefaultFailurePolicy.rethrowExceptionToTerminateRequest,
         transferListeners: [TransferListener] = []
     ) {

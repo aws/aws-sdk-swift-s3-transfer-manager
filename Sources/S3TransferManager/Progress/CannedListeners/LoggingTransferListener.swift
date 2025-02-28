@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import struct Smithy.SwiftLogger
+@preconcurrency import struct Smithy.SwiftLogger
 
 public struct LoggingTransferListener: TransferListener {
     private let logger = SwiftLogger(label: "LoggingTransferListener")

@@ -19,7 +19,7 @@ public struct UploadDirectoryInput: TransferInput {
     public let recursive: Bool
     public let s3Prefix: String?
     public let s3Delimiter: String
-    public let putObjectRequestCallback: (PutObjectInput) -> PutObjectInput
+    public let putObjectRequestCallback: @Sendable (PutObjectInput) -> PutObjectInput
     public let failurePolicy: FailurePolicy
     public let transferListeners: [TransferListener]
 
@@ -42,7 +42,9 @@ public struct UploadDirectoryInput: TransferInput {
         recursive: Bool = false,
         s3Prefix: String? = nil,
         s3Delimiter: String = "/",
-        putObjectRequestCallback: @escaping (PutObjectInput) -> PutObjectInput = { input in return input },
+        putObjectRequestCallback: @Sendable @escaping (PutObjectInput) -> PutObjectInput = {
+            input in return input
+        },
         failurePolicy: @escaping FailurePolicy = DefaultFailurePolicy.rethrowExceptionToTerminateRequest,
         transferListeners: [TransferListener] = []
     ) throws {

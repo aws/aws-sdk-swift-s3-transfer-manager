@@ -13,7 +13,7 @@
 /// These concrete error types contain the original error thrown from the failed single object transfer & the single object transfer input used with the failed operation. I.e., you could provide a custom failure policy that retries the failed single object transfer by retrieving and re-using the `UploadObjectInput` / `DownloadObjectInput` nested within them.
 ///
 /// The closure also takes in a `TransferInput` instance which is the original directory transfer input that was passed to the directory transfer operation (i.e., either `UploadDirectoryInput` or `DownloadBucketInput`).
-public typealias FailurePolicy = (
+public typealias FailurePolicy = @Sendable (
     Error,
     TransferInput
 ) async throws -> Void
