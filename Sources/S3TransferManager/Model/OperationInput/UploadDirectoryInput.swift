@@ -42,8 +42,8 @@ public struct UploadDirectoryInput: TransferInput {
         recursive: Bool = false,
         s3Prefix: String? = nil,
         s3Delimiter: String = "/",
-        putObjectRequestCallback: @Sendable @escaping (PutObjectInput) -> PutObjectInput = {
-            input in return input
+        putObjectRequestCallback: @Sendable @escaping (PutObjectInput) -> PutObjectInput = { input in
+            return input
         },
         failurePolicy: @escaping FailurePolicy = DefaultFailurePolicy.rethrowExceptionToTerminateRequest,
         transferListeners: [TransferListener] = []
@@ -63,7 +63,9 @@ public struct UploadDirectoryInput: TransferInput {
     private func validateSourceURL(_ source: URL) throws {
         let urlProperties = try source.resourceValues(forKeys: [.isDirectoryKey])
         guard urlProperties.isDirectory ?? false else {
-            throw S3TMUploadDirectoryError.InvalidSourceURL("Invalid source: provided source URL is not a directory URL.")
+            throw S3TMUploadDirectoryError.InvalidSourceURL(
+                "Invalid source: provided source URL is not a directory URL."
+            )
         }
     }
 }

@@ -178,10 +178,15 @@ public extension S3TransferManager {
             // Replace instances of s3Delimiter in keyWithoutPrefix with Mac/Linux system default
             //      path separtor "/" if s3Delimiter isn't "/".
             // This effectively "translates" object key value to a file path.
-            let relativeFilePath = s3Delimiter == defaultPathSeparator() ? keyWithoutPrefix : keyWithoutPrefix.replacingOccurrences(of: s3Delimiter, with: defaultPathSeparator())
+            let relativeFilePath = s3Delimiter == defaultPathSeparator()
+            ? keyWithoutPrefix
+            : keyWithoutPrefix.replacingOccurrences(
+                of: s3Delimiter,
+                with: defaultPathSeparator()
+            )
 
             // If relativeFilePath escapes destination directory, skip it.
-            if (filePathEscapesDestination(filePath: relativeFilePath)) {
+            if filePathEscapesDestination(filePath: relativeFilePath) {
                 return nil
             }
 

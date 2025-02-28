@@ -182,7 +182,11 @@ public struct UploadObjectInput: TransferInput {
     private func resolveChecksumType(
         _ input: PutObjectInput
     ) -> S3ClientTypes.ChecksumType? {
-        let providedChecksum = input.checksumCRC32 ?? input.checksumCRC32C ?? input.checksumSHA1 ?? input.checksumSHA256 ?? input.checksumCRC64NVME
+        let providedChecksum = input.checksumCRC32
+        ?? input.checksumCRC32C
+        ?? input.checksumSHA1
+        ?? input.checksumSHA256
+        ?? input.checksumCRC64NVME
         if providedChecksum != nil {
             return .fullObject
         } else {

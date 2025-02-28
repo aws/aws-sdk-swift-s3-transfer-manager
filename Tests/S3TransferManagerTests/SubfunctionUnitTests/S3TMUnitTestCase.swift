@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import XCTest
 @testable import S3TransferManager
+import XCTest
 
 class S3TMUnitTestCase: XCTestCase {
     // The shared transfer manager for tests.

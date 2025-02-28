@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import XCTest
 import AWSS3
 import S3TransferManager
 import SmithyStreams
+import XCTest
 
 class ConcurrentUploadObjectIntegTests: XCTestCase {
     var tm: S3TransferManager!

@@ -11,9 +11,4 @@ public struct DownloadBucketOutput: TransferOutput {
     public let objectsDownloaded: Int
     /// The number of failed S3 object downloads.
     public let objectsFailed: Int
-
-    init(objectsDownloaded: Int, objectsFailed: Int) {
-        self.objectsDownloaded = objectsDownloaded
-        self.objectsFailed = objectsFailed
-    }
 }

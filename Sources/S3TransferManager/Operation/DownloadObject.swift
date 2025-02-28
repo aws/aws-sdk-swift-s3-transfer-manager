@@ -323,7 +323,9 @@ public extension S3TransferManager {
     ) async throws -> DownloadObjectOutput {
         // End is inclusive, so must subtract 1 to get target amount.
         // E.g., if start is 2nd byte, to get 8 bytes, range becomes "bytes=2-9"; 2 + 8 - 1 = 9.
-        let firstRangeGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(range: "bytes=\(startByte)-\(startByte + config.targetPartSizeBytes - 1)")
+        let firstRangeGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(
+            range: "bytes=\(startByte)-\(startByte + config.targetPartSizeBytes - 1)"
+        )
         let firstRangeGetObjectOutput = try await performSingleGET(
             s3,
             firstRangeGetObjectInput,
@@ -401,7 +403,8 @@ public extension S3TransferManager {
         //      Now, say object size is 103 and part size is 10. We have 93 more bytes to fetch.
         //      We need to make 10 requests to get all 93 bytes (9 x 10 byte requests, and 10th request with 3 bytes).
         //      100 / 10 = 10. So we don't subtract 1 from it if there's a remainder.
-        let numRequests = (objectSize / config.targetPartSizeBytes) - (objectSize % config.targetPartSizeBytes == 0 ? 1 : 0)
+        let numRequests = (objectSize / config.targetPartSizeBytes)
+        - (objectSize % config.targetPartSizeBytes == 0 ? 1 : 0)
 
         // Size of batch is same as the semaphore limit.
         let batchSize = S3TMSemaphoreManager.Device.maxConcurrentTasksPerBucket
@@ -428,7 +431,9 @@ public extension S3TransferManager {
                     if let endByte, numRequest + 1 == numRequests { // + 1 bc numRequest is 0-indexed.
                         subRangeEnd = endByte
                     }
-                    let rangeGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(range: "bytes=\(subRangeStart)-\(subRangeEnd)")
+                    let rangeGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(
+                        range: "bytes=\(subRangeStart)-\(subRangeEnd)"
+                    )
 
                     await self.wait(semaphore)
                     try Task.checkCancellation()

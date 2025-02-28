@@ -250,7 +250,7 @@ public extension S3TransferManager {
 
     internal func getResolvedObjectKey(of url: URL, inDir dir: URL, input: UploadDirectoryInput) throws -> String {
         // Step 1: if given a non-default s3Delimter, throw validation exception if the file name contains s3Delimiter.
-        if (input.s3Delimiter != defaultPathSeparator()) {
+        if input.s3Delimiter != defaultPathSeparator() {
             guard !url.lastPathComponent.contains(input.s3Delimiter) else {
                 throw S3TMUploadDirectoryError.InvalidFileName(
                     "The file \"\(url.absoluteString)\" has S3 delimiter \"\(input.s3Delimiter)\" in its name."
@@ -268,7 +268,7 @@ public extension S3TransferManager {
         let fileAbsoluteString = url.absoluteString
         var relativePath = fileAbsoluteString.removePrefix(dirAbsoluteString)
         // Step 4: if user configured a custom s3Delimiter, replace all instances of system default path separator "/" in the relative path from step 3 with the custom s3Delimiter.
-        if (input.s3Delimiter != defaultPathSeparator()) {
+        if input.s3Delimiter != defaultPathSeparator() {
             relativePath = relativePath.replacingOccurrences(of: defaultPathSeparator(), with: input.s3Delimiter)
         }
         // Step 5: prefix the string from Step 4 with the resolved prefix.

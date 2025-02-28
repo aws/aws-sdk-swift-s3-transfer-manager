@@ -11,9 +11,4 @@ public struct UploadDirectoryOutput: TransferOutput {
     public let objectsUploaded: Int
     /// The number of failed file uploads.
     public let objectsFailed: Int
-
-    init(objectsUploaded: Int, objectsFailed: Int) {
-        self.objectsUploaded = objectsUploaded
-        self.objectsFailed = objectsFailed
-    }
 }

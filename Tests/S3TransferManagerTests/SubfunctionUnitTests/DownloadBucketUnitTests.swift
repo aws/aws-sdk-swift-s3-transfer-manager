@@ -34,7 +34,9 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             "dir1/key2.txt": URL(string: testDir.absoluteString.appendingPathComponent("dir1/key2.txt"))!,
             "dir1/../key1.txt": URL(string: testDir.absoluteString.appendingPathComponent("dir1/../key1.txt"))!
         ]
-        let actualKeyToCreatedURLsMap = try DownloadBucketUnitTests.tm.createDestinationFiles(keyToResolvedURLMapping: keyToURLInput)
+        let actualKeyToCreatedURLsMap = try DownloadBucketUnitTests.tm.createDestinationFiles(
+            keyToResolvedURLMapping: keyToURLInput
+        )
         XCTAssertEqual(actualKeyToCreatedURLsMap.count, 2)
         try FileManager.default.removeItem(at: testDir)
     }
@@ -118,7 +120,8 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
     ) -> [S3ClientTypes.Object] {
         return [
             .init(key: prefix + "simulatedDirectory\(d)"), // File skipped bc it ends with "/"
-            .init(key: prefix + "dir1\(d)dir2\(d)..\(d)..\(d)..\(d)escapedFile.txt"), // File skipped bc it escapes dest.
+            // File below needs to be skipped bc it escapes dest.
+            .init(key: prefix + "dir1\(d)dir2\(d)..\(d)..\(d)..\(d)escapedFile.txt"),
             .init(key: prefix + "a.txt"),
             .init(key: prefix + "dir1\(d)b.txt"),
             .init(key: prefix + "dir1\(d)dir2\(d)c.txt"),

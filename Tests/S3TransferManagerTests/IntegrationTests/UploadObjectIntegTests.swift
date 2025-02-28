@@ -5,18 +5,19 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import XCTest
 import AWSS3
 import S3TransferManager
 import Smithy
 import SmithyStreams
+import XCTest
 
 // Set "RUN_LARGE_S3TM_UPLOAD_OBJECT_TESTS" environment variable to "YES" to run > 500MB tests.
 class UploadObjectIntegTests: XCTestCase {
     static var tm: S3TransferManager! // The shared transfer manager for tests.
     static var s3: S3Client! // The shared S3 client for tests.
     static let region = "us-west-2"
-    static let bucketName = "s3tm-upload-object-integ-test-" + UUID().uuidString.split(separator: "-").first!.lowercased()
+    static let bucketName = "s3tm-upload-object-integ-test-"
+    + UUID().uuidString.split(separator: "-").first!.lowercased()
 
     // This setUp runs just once for the test class, before tests start execution.
     override class func setUp() {
@@ -290,7 +291,10 @@ class UploadObjectIntegTests: XCTestCase {
     }
 
     // Validates uploaded object contents using getObject.
-    private func validatePatternResponse(in output: GetObjectOutput, size: UploadObjectTestFileSize) async throws -> Bool {
+    private func validatePatternResponse(
+        in output: GetObjectOutput,
+        size: UploadObjectTestFileSize
+    ) async throws -> Bool {
         guard size.shouldUsePatternedData else { return true } // Skip verification for sparse files.
 
         let body = try await output.body?.readData()!
@@ -413,40 +417,40 @@ private enum UploadObjectTestFileSize {
 
     var bytes: Int {
         switch self {
-            case .mb4: return 4 * 1024 * 1024
-            case .mb8: return 8 * 1024 * 1024
-            case .mb12: return 12 * 1024 * 1024
-            case .mb16: return 16 * 1024 * 1024
-            case .mb50: return 50 * 1024 * 1024
-            case .mb100: return 100 * 1024 * 1024
-            case .mb500: return 500 * 1024 * 1024
-            case .gb5: return 5 * 1024 * 1024 * 1024
-            case .gb50: return 50 * 1024 * 1024 * 1024
-            case .tb1: return 1024 * 1024 * 1024 * 1024
-            case .tb5: return 5 * 1024 * 1024 * 1024 * 1024
+        case .mb4: return 4 * 1024 * 1024
+        case .mb8: return 8 * 1024 * 1024
+        case .mb12: return 12 * 1024 * 1024
+        case .mb16: return 16 * 1024 * 1024
+        case .mb50: return 50 * 1024 * 1024
+        case .mb100: return 100 * 1024 * 1024
+        case .mb500: return 500 * 1024 * 1024
+        case .gb5: return 5 * 1024 * 1024 * 1024
+        case .gb50: return 50 * 1024 * 1024 * 1024
+        case .tb1: return 1024 * 1024 * 1024 * 1024
+        case .tb5: return 5 * 1024 * 1024 * 1024 * 1024
         }
     }
 
     var shouldUsePatternedData: Bool {
         switch self {
-            case .mb4, .mb8, .mb12, .mb16, .mb50: return true
-            default: return false
+        case .mb4, .mb8, .mb12, .mb16, .mb50: return true
+        default: return false
         }
     }
 
     var description: String {
         switch self {
-            case .mb4: return "4MB"
-            case .mb8: return "8MB"
-            case .mb12: return "12MB"
-            case .mb16: return "16MB"
-            case .mb50: return "50MB"
-            case .mb100: return "100MB"
-            case .mb500: return "500MB"
-            case .gb5: return "5GB"
-            case .gb50: return "50GB"
-            case .tb1: return "1TB"
-            case .tb5: return "5TB"
+        case .mb4: return "4MB"
+        case .mb8: return "8MB"
+        case .mb12: return "12MB"
+        case .mb16: return "16MB"
+        case .mb50: return "50MB"
+        case .mb100: return "100MB"
+        case .mb500: return "500MB"
+        case .gb5: return "5GB"
+        case .gb50: return "50GB"
+        case .tb1: return "1TB"
+        case .tb5: return "5TB"
         }
     }
 

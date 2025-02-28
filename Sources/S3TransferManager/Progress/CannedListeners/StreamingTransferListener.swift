@@ -85,7 +85,11 @@ public final class StreamingTransferListener: TransferListener {
         }
     }
 
-    public func onTransferComplete(input: any TransferInput, output: any TransferOutput, snapshot: any TransferProgressSnapshot) {
+    public func onTransferComplete(
+        input: any TransferInput,
+        output: any TransferOutput,
+        snapshot: any TransferProgressSnapshot
+    ) {
         let transferInputType = TransferInputType(from: input)
         switch transferInputType {
         case .uploadObject(let uploadObjectInput):

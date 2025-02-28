@@ -6,10 +6,10 @@
 //
 
 import AWSS3
+@testable import S3TransferManager
 import Smithy
 import SmithyStreams
 import XCTest
-@testable import S3TransferManager
 
 class UploadObjectUnitTests: S3TMUnitTestCase {
     // MARK: - resolvePayloadSize tests.

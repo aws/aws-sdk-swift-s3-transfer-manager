@@ -39,8 +39,8 @@ public struct DownloadBucketInput: TransferInput {
         s3Prefix: String? = nil,
         s3Delimiter: String = "/",
         filter: @Sendable @escaping (S3ClientTypes.Object) -> Bool = { input in return false },
-        getObjectRequestCallback: @Sendable @escaping (GetObjectInput) -> GetObjectInput = {
-            input in return input
+        getObjectRequestCallback: @Sendable @escaping (GetObjectInput) -> GetObjectInput = { input in
+            return input
         },
         failurePolicy: @escaping FailurePolicy = DefaultFailurePolicy.rethrowExceptionToTerminateRequest,
         transferListeners: [TransferListener] = []

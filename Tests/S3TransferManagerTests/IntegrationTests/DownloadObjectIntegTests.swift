@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import XCTest
 import AWSS3
 import S3TransferManager
 import SmithyStreams
+import XCTest
 
 // Set "RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS" environment variable to "YES" to run > 100MB tests.
 class DownloadObjectIntegTests: XCTestCase {
@@ -50,11 +50,13 @@ class DownloadObjectIntegTests: XCTestCase {
                     ))
 
                     // Upload once using MPU with key "MPU-100MB" by using S3TM.
-                    _ = try await S3TransferManager(config: S3TransferManagerConfig(s3Client: s3)).uploadObject(input: UploadObjectInput(putObjectInput: PutObjectInput(
-                        body: .data(objectData),
-                        bucket: bucketName,
-                        key: mpuObjectKey
-                    ))).value
+                    _ = try await S3TransferManager(config: S3TransferManagerConfig(s3Client: s3))
+                        .uploadObject(input: UploadObjectInput(putObjectInput: PutObjectInput(
+                            body: .data(objectData),
+                            bucket: bucketName,
+                            key: mpuObjectKey
+                        )
+                    )).value
 
                     // Upload second time using single putObject with key "NonMPU-100MB".
                     _ = try await s3.putObject(input: PutObjectInput(
@@ -364,7 +366,8 @@ class DownloadObjectIntegTests: XCTestCase {
         guard ProcessInfo.processInfo.environment["RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS"] == "YES" else {
             // Creates a "skip" result, not a failure.
             throw XCTSkip(
-                "Skipping large download (>= 5GB) test. Set RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS env var to \"YES\" to run."
+                "Skipping large download (>= 5GB) test. "
+                + "Set RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS env var to \"YES\" to run."
             )
         }
     }
@@ -420,15 +423,15 @@ private enum LargeDownloadObjectTestFileSize {
 
     var bytes: Int {
         switch self {
-            case .gb5: return 5 * 1024 * 1024 * 1024
-            case .gb15: return 15 * 1024 * 1024 * 1024
+        case .gb5: return 5 * 1024 * 1024 * 1024
+        case .gb15: return 15 * 1024 * 1024 * 1024
         }
     }
 
     var s3ObjectKey: String {
         switch self {
-            case .gb5: return "MPU-5GB"
-            case .gb15: return "MPU-15GB"
+        case .gb5: return "MPU-5GB"
+        case .gb15: return "MPU-15GB"
         }
     }
 }

@@ -21,6 +21,10 @@ disabled_rules:
   - large_tuple
   - trailing_comma
   - non_optional_string_data_conversion
+  - force_cast
+  - unused_closure_parameter
+  - closure_parameter_position
+  - type_body_length
 
 opt_in_rules:
   - empty_count

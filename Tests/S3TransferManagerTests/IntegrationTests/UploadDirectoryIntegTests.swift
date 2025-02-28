@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import XCTest
 import AWSS3
 import S3TransferManager
+import XCTest
 
 class UploadDirectoryIntegTests: XCTestCase {
     static var tm: S3TransferManager! // The shared transfer manager for tests.
