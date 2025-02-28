@@ -7,7 +7,7 @@
 
 import XCTest
 import AWSS3
-import AWSServiceExtensions
+import S3TransferManager
 
 class UploadDirectoryIntegTests: XCTestCase {
     static var tm: S3TransferManager! // The shared transfer manager for tests.

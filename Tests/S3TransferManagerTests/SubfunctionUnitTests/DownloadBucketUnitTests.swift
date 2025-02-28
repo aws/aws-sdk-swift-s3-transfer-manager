@@ -8,7 +8,7 @@
 import XCTest
 import enum AWSS3.S3ClientTypes
 import class Foundation.FileManager
-@testable import AWSServiceExtensions
+@testable import S3TransferManager
 
 class DownloadBucketUnitTests: S3TMUnitTestCase {
     // MARK: - createDestinationFiles test.

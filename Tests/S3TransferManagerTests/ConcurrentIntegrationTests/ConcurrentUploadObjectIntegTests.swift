@@ -7,7 +7,7 @@
 
 import XCTest
 import AWSS3
-import AWSServiceExtensions
+import S3TransferManager
 import SmithyStreams
 
 class ConcurrentUploadObjectIntegTests: XCTestCase {

@@ -5,8 +5,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import SmithyHTTPAPI
-
 /// The protocol that all concrete transfer listener types must conform to.
 ///
 /// The operations of `S3TransferManager` are "instrumented" with these transfer listener hooks.

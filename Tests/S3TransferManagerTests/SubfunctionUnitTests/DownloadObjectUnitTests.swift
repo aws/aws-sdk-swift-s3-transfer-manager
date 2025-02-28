@@ -8,7 +8,7 @@
 import AWSS3
 import XCTest
 import Smithy
-@testable import AWSServiceExtensions
+@testable import S3TransferManager
 
 class DownloadObjectUnitTests: S3TMUnitTestCase {
     let dummyInput = DownloadObjectInput(outputStream: OutputStream(), getObjectInput: GetObjectInput())

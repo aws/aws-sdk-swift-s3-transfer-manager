@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@testable import AWSServiceExtensions
+@testable import S3TransferManager
 
 class UploadDirectoryUnitTests: S3TMUnitTestCase {
     /*

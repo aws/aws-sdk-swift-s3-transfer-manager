@@ -26,11 +26,18 @@ let package = Package(
             dependencies: [
                 .product(name: "AWSS3", package: "aws-sdk-swift"),
                 .product(name: "Smithy", package: "smithy-swift"),
+                .product(name: "SmithyStreams", package: "smithy-swift"),
             ]
         ),
         .testTarget(
             name: "S3TransferManagerTests",
-            dependencies: []
+            dependencies: [
+                "S3TransferManager",
+                .product(name: "AWSS3", package: "aws-sdk-swift"),
+                .product(name: "Smithy", package: "smithy-swift"),
+                .product(name: "SmithyStreams", package: "smithy-swift"),
+            ],
+            resources: [.copy("Resources")]
         ),
     ]
 )
