@@ -11,16 +11,18 @@ import struct Foundation.UUID
 
 /// The synthetic input type for the `uploadObject` operation of `S3TransferManager`.
 public struct UploadObjectInput: TransferInput {
+    /// The unique ID for the operation; can be used to log or identify a specific request.
     public let operationID: String
-
+    /// The input struct for the object you want to upload.
     public let putObjectInput: PutObjectInput
+    /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
     public let transferListeners: [TransferListener]
 
     /// Initializes `UploadObjectInput` with provided parameters.
     ///
     /// - Parameters:
     ///   - putObjectInput: An instance of the `PutObjectInput`.
-    ///   - transferListeners: An array of `TransferListener`. The transfer progress of the operation will be published to each transfer listener provided here via hooks. Default value is an empty array.
+    ///   - transferListeners: An array of `TransferListener`. The transfer status and progress of the operation will be published to each transfer listener provided here via hooks. Default value is an empty array.
     public init(
         putObjectInput: PutObjectInput,
         transferListeners: [TransferListener] = []
