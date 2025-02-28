@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// The transfer progress snapshot for single object operations; `uploadObject` and `downloadObject`.
+/// The transfer progress snapshot for single object operations `uploadObject` and `downloadObject`.
 public struct SingleObjectTransferProgressSnapshot: TransferProgressSnapshot {
     /// Total number of bytes transferred so far.
     public let transferredBytes: Int

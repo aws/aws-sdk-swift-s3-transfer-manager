@@ -5,13 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// An enum that provides type-safe access to specific transfer operation inputs.
+/// The enum that provides type-safe access to specific transfer operation inputs.
 ///
-/// Instead of using explicit type casting with `as?`, this enum allows pattern matching
-/// to safely access concrete input types (like `UploadObjectInput` or `DownloadObjectInput`)
-/// through its associated values:
+/// Instead of using explicit type casting with `as?`, this enum allows pattern matching to safely access concrete input types (e.g., `UploadObjectInput`) through its associated values:
 ///
-/// ```swift
+/// ```
 /// switch TransferInputType(from: input) {
 /// case .uploadObject(let uploadInput):
 ///     // uploadInput is typed as UploadObjectInput

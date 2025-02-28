@@ -7,9 +7,15 @@
 
 @preconcurrency import struct Smithy.SwiftLogger
 
+/// The `TransferListener` type that logs transfer status and progress using `swift-log`.
+///
+/// This transfer listener logs to the console by default.
+///
+/// See README.md for the example usage with the `uploadObject` transfer operation.
 public struct LoggingTransferListener: TransferListener {
     private let logger = SwiftLogger(label: "LoggingTransferListener")
 
+    /// Initializes `LoggingTransferListener`.
     public init() {}
 
     public func onTransferInitiated(input: any TransferInput, snapshot: any TransferProgressSnapshot) {

@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// The transfer progress snapshot for directory operations; `uploadDirectory` and `downloadBucket`.
+/// The transfer progress snapshot for directory operations `uploadDirectory` and `downloadBucket`.
 public struct DirectoryTransferProgressSnapshot: TransferProgressSnapshot {
     /// Total number of files successfully transferred so far.
     public let transferredFiles: Int

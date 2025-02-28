@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// The `TransferListener` type that streams events to `AsyncThrowingStream` for asynchronous and customized handling of `TransferEvent`s.
+/// The `TransferListener` type that streams `TransferEvent` events to `AsyncThrowingStream` to allow asynchronous and customized handling.
 ///
 /// This transfer listener allows custom handling of each transfer event defined by the `TransferEvent` enum.
 /// To use, first initialize an instance of the listener, and include it as one of the listeners in the corresponding `S3TransferManger` operation's input (e.g., `UploadObjectInput.transferListeners`).
@@ -21,9 +21,6 @@ public final class StreamingTransferListener: TransferListener {
     private let continuation: AsyncThrowingStream<TransferEvent, Error>.Continuation
 
     /// Initializes `StreamingTransferListener`.
-    ///
-    /// Creates a stream of type `AsyncThrowingStream<TransferEvent, Error>`.
-    /// Instances of the `TransferEvent` enum will be published to that stream for custom event handling by the user.
     public init() {
         (self.stream, self.continuation) = AsyncThrowingStream.makeStream()
     }
@@ -154,7 +151,7 @@ public final class StreamingTransferListener: TransferListener {
     }
 }
 
-/// The event types of `StreamingTransferListener`.
+/// The set of events that `StreamingTransferListener` may publish to its stream instance property.
 public enum TransferEvent: Sendable {
     // `uploadObject` events.
     case uploadObjectInitiated(input: UploadObjectInput, snapshot: SingleObjectTransferProgressSnapshot)

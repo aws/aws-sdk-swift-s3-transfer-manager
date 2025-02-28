@@ -7,9 +7,9 @@
 
 /// The protocol that all concrete transfer listener types must conform to.
 ///
-/// The operations of `S3TransferManager` are "instrumented" with these transfer listener hooks.
+/// The transfer operations of `S3TransferManager` are "instrumented" with these transfer listener hooks.
 ///
-/// Users can implement custom transfer listeners and provide it via the `transferListeners` argument of the corresponding operation input struct.
+/// Users can implement custom transfer listeners and provide it via the `transferListeners` property of the corresponding operation input struct.
 public protocol TransferListener: Sendable {
     /// This method is invoked exactly once per transfer, right after the operation has started.
     func onTransferInitiated(input: TransferInput, snapshot: TransferProgressSnapshot)
