@@ -12,7 +12,7 @@ import struct Foundation.UUID
 /// The synthetic input type for the `downloadObject` operation of `S3TransferManager`.
 public struct DownloadObjectInput: TransferInput, @unchecked Sendable {
     /*
-        The type is `@unchecked Sendable` because of the `outputStream: OutputStream`, which isn't thread-safe by default. However, the way `.downloadObject` is implemented makes it concurency-safe. While `.downloadObject` transfer operation _does_ concurrently get a S3 object in parts, only one thread writes to `outputStream` at any given time because writes happen with the entire batch after each batch completes their concurrent download.
+        The type is `@unchecked Sendable` because of the `outputStream: OutputStream`, which isn't thread-safe by default. However, the way `.downloadObject` is implemented makes it concurency-safe. While `.downloadObject` transfer operation _does_ concurrently get an S3 object in parts, only one thread writes to `outputStream` at any given time because writes happen with the entire batch after each batch completes their concurrent download.
      */
     /// The unique ID for the operation; can be used to log or identify a specific request.
     public let operationID: String

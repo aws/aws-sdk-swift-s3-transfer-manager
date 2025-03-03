@@ -255,7 +255,7 @@ public extension S3TransferManager {
         return downloadObjectOutput
     }
 
-    // Gets all parts of a S3 object starting at second part and writes them to the output stream.
+    // Gets all parts of an S3 object starting at second part and writes them to the output stream.
     private func concurrentlyFetchPartGETByteStreamsAndWriteToOutputStream(
         s3: S3Client,
         input: DownloadObjectInput,
@@ -386,7 +386,7 @@ public extension S3TransferManager {
         return downloadObjectOutput
     }
 
-    // Gets all segments of a S3 object starting at second subrange and writes them to the output stream.
+    // Gets all segments of an S3 object starting at second subrange and writes them to the output stream.
     private func concurrentlyFetchRangeGETByteStreamsAndWriteToOutputStream(
         s3: S3Client,
         input: DownloadObjectInput,

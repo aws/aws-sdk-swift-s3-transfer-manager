@@ -13,7 +13,7 @@ import enum Smithy.ByteStream
 import struct Foundation.URL
 
 public extension S3TransferManager {
-    /// Uploads local directory to a S3 bucket.
+    /// Uploads a local directory to an S3 bucket.
     ///
     /// Returns a `Task` immediately after function call; upload is handled in the background using asynchronous child tasks.
     /// If the `Task` returned by the function gets cancelled, all child tasks also get cancelled automatically.

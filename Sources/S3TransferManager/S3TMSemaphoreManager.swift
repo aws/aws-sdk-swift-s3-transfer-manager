@@ -36,7 +36,7 @@ internal actor S3TMSemaphoreManager {
     private var semaphores: [String: SemaphoreInfo] = [:]
     private let maxConcurrentTasksPerBucket = Device.maxConcurrentTasksPerBucket
 
-    // Creates or returns the semaphore for a given bucket name.
+    // Creates and/or returns the semaphore for a given bucket name.
     internal func getSemaphoreInstance(forBucket bucketName: String) -> DispatchSemaphore {
         if let info = semaphores[bucketName] {
             // Existing semaphore; increment usage count and return it.
@@ -56,7 +56,7 @@ internal actor S3TMSemaphoreManager {
         }
     }
 
-    // Reduces usage count or deletes the semaphore for a given bucket name.
+    // Reduces usage count and/or deletes the semaphore for a given bucket name.
     internal func releaseSemaphoreInstance(forBucket bucketName: String) {
         guard let info = semaphores[bucketName] else { return }
         let newCount = info.useCount - 1
