@@ -6,11 +6,11 @@ This library is currently in developer preview and is NOT recommended for produc
 
 It is meant for early access and feedback gathering at this time. We'd love to hear from you on use cases, feature prioritization, and API feedback.
 
-See the AWS SDK and Tools maintenance policy descriptions for more information.
+See the AWS SDK and Tools [maintenance policy descriptions](https://docs.aws.amazon.com/sdkref/latest/guide/maint-policy.html#version-life-cycle) for more information.
 
 ## Overview
 
-The Amazon S3 Transfer Manager for Swift (S3TM for short) is a high-level library built on top of the AWS Swift SDK S3 client. It provides an intuitive transfer API for reliable and performant data transfer between your Swift application and Amazon S3, as well as the ability to monitor the progress of the transfers in real-time.
+The Amazon S3 Transfer Manager for Swift (S3TM for short) is a high-level library built on top of the [AWS Swift SDK S3 client](https://github.com/awslabs/aws-sdk-swift/blob/main/Sources/Services/AWSS3/Sources/AWSS3/S3Client.swift). It provides an intuitive transfer API for reliable and performant data transfer between your Swift application and Amazon S3, as well as the ability to monitor the progress of the transfers in real-time.
 
 There are 4 transfer operations supported by S3TM:
 
@@ -25,11 +25,11 @@ As mentioned above, S3TM allows monitoring the progress of all 4 operations abov
 
 ### Add the dependency to your Xcode project
 
-TODO AFTER GITHUB REPO CREATION: Add rough outline of steps needed to add the S3TM dependency to an Xcode project
+**_TODO AFTER GITHUB REPO CREATION: Add rough outline of steps needed to add the S3TM dependency to an Xcode project_**
 
 ### Add the dependency to your Swift package
 
-TODO AFTER GITHUB REPO CREATION: Add example Package.swift contents
+**_TODO AFTER GITHUB REPO CREATION: Add example Package.swift contents_**
 
 ### Initialize the S3 Transfer Manager
 
@@ -64,7 +64,7 @@ let s3tmConfig = try await S3TransferManagerConfig(
 let s3tm = S3TransferManager(config: s3tmConfig)
 ```
 
-For more information on what each configuration does, please refer to these documentation comments on S3TransferManagerConfig. TODO AFTER GITHUB REPO CREATION: ADD LINK
+For more information on what each configuration does, please refer to these documentation comments on S3TransferManagerConfig. **_TODO AFTER GITHUB REPO CREATION: ADD LINK_**
 
 ## Amazon S3 Transfer Manager for Swift usage examples
 
@@ -72,7 +72,7 @@ For more information on what each configuration does, please refer to these docu
 
 To upload a file to Amazon S3, you need to provide the input struct UploadObjectInput, which is a container for the PutObjectInput struct and an array of TransferListener. You must provide the target bucket, the S3 object key to use, and the file body via PutObjectInput members. 
 
-For uploading files bigger than the configured threshold (16MB default), S3TM breaks them down into parts, each with the configured part size, and uploads them concurrently using S3’s multipart upload feature.
+For uploading files bigger than the configured threshold (16MB default), S3TM breaks them down into parts, each with the configured part size, and uploads them concurrently using S3’s [multipart upload feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html#mpu-process).
 
 ```swift
 let s3tm = try await S3TransferManager()
@@ -104,7 +104,7 @@ do {
 
 ### Download an object
 
-To download an object from Amazon S3, you need to provide the input struct DownloadObjectInput, which is a container for the download destination, the GetObjectInput struct, and an array of TransferListener. The download destination is an instance of Swift’s Foundation.OutputStream. You must provide the target bucket and the S3 object key via GetObjectInput members. 
+To download an object from Amazon S3, you need to provide the input struct DownloadObjectInput, which is a container for the download destination, the GetObjectInput struct, and an array of TransferListener. The download destination is an instance of [Swift’s Foundation.OutputStream](https://developer.apple.com/documentation/foundation/outputstream). You must provide the target bucket and the S3 object key via GetObjectInput members. 
 
 For downloading objects bigger than a single part size (8MB default), S3TM concurrently downloads the entire object in parts using part numbers or byte ranges.
 
@@ -137,7 +137,7 @@ do {
 
 To upload a local directory to Amazon S3, you need to provide the input struct UploadDirectoryInput and provide the target bucket, and the source directory’s URL. 
 
-The UploadDirectoryInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to these documentation comments on the UploadDirectoryInput initializer. TODO AFTER GITHUB REPO CREATION: ADD LINK
+The UploadDirectoryInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to these documentation comments on the UploadDirectoryInput initializer. **_TODO AFTER GITHUB REPO CREATION: ADD LINK_**
 
 ```swift
 let s3tm = try await S3TransferManager()
@@ -164,7 +164,7 @@ do {
 
 To download a S3 bucket to a local directory, you need to provide the input struct DownloadBucketInput and provide the source bucket, and the destination directory URL.
 
-The DownloadBucketInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to these documentation comments on the DownloadBucketInput initializer. TODO AFTER GITHUB REPO CREATION: ADD LINK
+The DownloadBucketInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to these documentation comments on the DownloadBucketInput initializer. **_TODO AFTER GITHUB REPO CREATION: ADD LINK_**
 
 ```swift
 let s3tm = try await S3TransferManager()
@@ -191,7 +191,7 @@ do {
 
 You can optionally configure transfer listeners for any of the S3TM operations above. The Amazon S3 Transfer Manager for Swift provides 2 canned transfer progress listeners for you. They’re LoggingTransferListener and StreamingTransferListener. 
 
-The LoggingTransferListener logs transfer events to the console (or some other configured location) usingswift-log. The StreamingTransferListener publishes transfer events to its AsyncThrowingStream instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., UploadObject.transferListeners). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the TransferListener protocol and configuring it in the input structs.
+The LoggingTransferListener logs transfer events to the console (or some other configured location) using [swift-log](https://github.com/apple/swift-log). The StreamingTransferListener publishes transfer events to its AsyncThrowingStream instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., UploadObject.transferListeners). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the TransferListener protocol and configuring it in the input structs.
 
 See below for the example usage of the two canned transfer listeners.
 
