@@ -1,5 +1,10 @@
 # Amazon S3 Transfer Manager for Swift
 
+[![License][apache-badge]][apache-url]
+
+[apache-badge]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
+[apache-url]: LICENSE
+
 ## ⚠️ Developer Preview
 
 This library is currently in developer preview and is NOT recommended for production environments.
@@ -64,7 +69,7 @@ let s3tmConfig = try await S3TransferManagerConfig(
 let s3tm = S3TransferManager(config: s3tmConfig)
 ```
 
-For more information on what each configuration does, please refer to these documentation comments on S3TransferManagerConfig. **_TODO AFTER GITHUB REPO CREATION: ADD LINK_**
+For more information on what each configuration does, please refer to [the documentation comments on S3TransferManagerConfig](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/S3TransferManagerConfig.swift).
 
 ## Amazon S3 Transfer Manager for Swift usage examples
 
@@ -137,7 +142,7 @@ do {
 
 To upload a local directory to Amazon S3, you need to provide the input struct UploadDirectoryInput and provide the target bucket, and the source directory’s URL. 
 
-The UploadDirectoryInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to these documentation comments on the UploadDirectoryInput initializer. **_TODO AFTER GITHUB REPO CREATION: ADD LINK_**
+The UploadDirectoryInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the UploadDirectoryInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/UploadDirectoryInput.swift).
 
 ```swift
 let s3tm = try await S3TransferManager()
@@ -164,7 +169,7 @@ do {
 
 To download a S3 bucket to a local directory, you need to provide the input struct DownloadBucketInput and provide the source bucket, and the destination directory URL.
 
-The DownloadBucketInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to these documentation comments on the DownloadBucketInput initializer. **_TODO AFTER GITHUB REPO CREATION: ADD LINK_**
+The DownloadBucketInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the DownloadBucketInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/DownloadBucketInput.swift).
 
 ```swift
 let s3tm = try await S3TransferManager()
