@@ -16,3 +16,10 @@ Package.resolved
 # Xcode config that is for the installed copy only
 xcuserdata
 DerivedData
+
+# IntelliJ config & temp files
+/ideaSDK
+*.iml
+.idea/
+/android-studio/sdk
+workspace.xml

@@ -1,0 +1,122 @@
+name: Unit Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  apple:
+      runs-on: ${{ matrix.runner }}
+      strategy:
+        fail-fast: false
+        matrix:
+          # This matrix runs unit tests on iOS sim & Mac, on oldest & newest supported Xcode.
+          runner:
+            - macos-14
+            - macos-15
+          xcode:
+            - Xcode_15.2
+            - Xcode_16.1
+          destination:
+            - 'platform=iOS Simulator,OS=17.2,name=iPhone 15'
+            - 'platform=iOS Simulator,OS=18.1,name=iPhone 16'
+            - 'platform=tvOS Simulator,OS=17.2,name=Apple TV 4K (3rd generation) (at 1080p)'
+            - 'platform=tvOS Simulator,OS=18.1,name=Apple TV 4K (3rd generation) (at 1080p)'
+            - 'platform=visionOS Simulator,OS=1.0,name=Apple Vision Pro'
+            - 'platform=visionOS Simulator,OS=2.1,name=Apple Vision Pro'
+            - 'platform=macOS'
+          exclude:
+            # Don't run old macOS with new Xcode
+            - runner: macos-14
+              xcode: Xcode_16.1
+            # Don't run new macOS with old Xcode
+            - runner: macos-15
+              xcode: Xcode_15.2
+            # Don't run old simulators with new Xcode
+            - destination: 'platform=tvOS Simulator,OS=17.2,name=Apple TV 4K (3rd generation) (at 1080p)'
+              xcode: Xcode_16.1
+            - destination: 'platform=iOS Simulator,OS=17.2,name=iPhone 15'
+              xcode: Xcode_16.1
+            - destination: 'platform=visionOS Simulator,OS=1.0,name=Apple Vision Pro'
+              xcode: Xcode_16.1
+            # Don't run new simulators with old Xcode
+            - destination: 'platform=tvOS Simulator,OS=18.1,name=Apple TV 4K (3rd generation) (at 1080p)'
+              xcode: Xcode_15.2
+            - destination: 'platform=iOS Simulator,OS=18.1,name=iPhone 16'
+              xcode: Xcode_15.2
+            - destination: 'platform=visionOS Simulator,OS=2.1,name=Apple Vision Pro'
+              xcode: Xcode_15.2
+      steps:
+        - name: Configure Xcode
+          run: sudo xcode-select -s /Applications/${{ matrix.xcode }}.app
+        - name: Install visionOS sim if needed
+          if: ${{ contains(matrix.destination, 'platform=visionOS') }}
+          run: |
+            sudo xcodebuild -runFirstLaunch
+            sudo xcrun simctl list
+            sudo xcodebuild -downloadPlatform visionOS
+            sudo xcodebuild -runFirstLaunch
+        - name: Checkout aws-sdk-swift-s3-transfer-manager
+          uses: actions/checkout@v4
+          with:
+            path: aws-sdk-swift-s3-transfer-manager
+        - name: Cache Swift
+          uses: actions/cache@v4
+          with:
+            path: |
+              ~/Library/Caches/org.swift.swiftpm
+              ~/.cache/org.swift.swiftpm
+            key: 1-${{ runner.os }}-${{ matrix.xcode }}-${{ hashFiles('Package.swift') }}
+            restore-keys: |
+              1-${{ runner.os }}-${{ matrix.xcode }}-${{ hashFiles('Package.swift') }}
+              1-${{ runner.os }}-${{ matrix.xcode }}-
+        - name: Print Package.swift
+          run: |
+            cd aws-sdk-swift-s3-transfer-manager
+            cat Package.swift
+        - name: Build and Run Unit Tests
+          run: |
+            cd aws-sdk-swift-s3-transfer-manager
+            set -o pipefail && \
+            NSUnbufferedIO=YES xcodebuild \
+              -scheme aws-sdk-swift-s3-transfer-manager-Package \
+              -destination '${{ matrix.destination }}' \
+              test 2>&1 \
+              | xcbeautify
+
+  linux:
+    runs-on: ubuntu-latest
+    container: swift:${{ matrix.version }}-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - jammy
+        version:
+          - "5.9"
+          - "6.0"
+    steps:
+      - name: Checkout aws-sdk-swift-s3-transfer-manager
+        uses: actions/checkout@v4
+        with:
+          path: aws-sdk-swift-s3-transfer-manager
+      - name: Cache Swift
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/.cache/org.swift.swiftpm
+          key: 1-${{ runner.os }}-swift-${{ matrix.version }}-spm-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            1-${{ runner.os }}-swift-${{ matrix.version }}-spm-${{ hashFiles('Package.swift') }}
+            1-${{ runner.os }}-swift-${{ matrix.version }}-spm-
+      - name: Install OpenSSL
+        run: apt-get update && apt-get install -y libssl-dev
+      - name: Print Package.swift
+        run: |
+          cd aws-sdk-swift-s3-transfer-manager
+          cat Package.swift
+      - name: Build and Run Unit Tests
+        run: |
+          cd aws-sdk-swift-s3-transfer-manager
+          swift test
