@@ -133,7 +133,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
 
     func testValidateOrCreateDestinationDirectoryWithExistingDirectoryURL() throws {
         let destinationURL = URL(string: Bundle.module.resourceURL!.absoluteString.appendingPathComponent(
-            "Resources/DownloadBucketUnitTestsResources/destination"
+            "\(resourceURLPrefix())DownloadBucketUnitTestsResources/destination"
         ))!
         try DownloadBucketUnitTests.tm.validateOrCreateDestinationDirectory(input: DownloadBucketInput(
             bucket: "dummy",
@@ -143,7 +143,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
 
     func testValidateOrCreateDestinationDirectoryWithExistingFileURL() throws {
         let destinationURL = URL(string: Bundle.module.resourceURL!.absoluteString.appendingPathComponent(
-            "Resources/DownloadBucketUnitTestsResources/file.txt"
+            "\(resourceURLPrefix())DownloadBucketUnitTestsResources/file.txt"
         ))!
         do {
             try DownloadBucketUnitTests.tm.validateOrCreateDestinationDirectory(input: DownloadBucketInput(

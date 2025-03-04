@@ -81,6 +81,7 @@ jobs:
             NSUnbufferedIO=YES xcodebuild \
               -scheme aws-sdk-swift-s3-transfer-manager-Package \
               -destination '${{ matrix.destination }}' \
+              -only-testing:S3TransferManagerUnitTests \
               test 2>&1 \
               | xcbeautify
 
@@ -119,4 +120,4 @@ jobs:
       - name: Build and Run Unit Tests
         run: |
           cd aws-sdk-swift-s3-transfer-manager
-          swift test
+          swift test --filter S3TransferManagerUnitTests

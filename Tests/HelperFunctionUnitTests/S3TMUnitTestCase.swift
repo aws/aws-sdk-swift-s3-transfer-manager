@@ -68,4 +68,14 @@ class S3TMUnitTestCase: XCTestCase {
             }
         }
     }
+
+    func resourceURLPrefix() -> String {
+        /*
+            Tests run in Xcode have resource files located in "Resources/Resources/..."
+            Tests run in terminal with `swift test` have resource files located in "Resources/..."
+            This is due to different test resource handling logic between Xcode and swift toolchain.
+            Return "Resources/" prefix if the resource URL contains "xctest". Return "" otherwise.
+         */
+        return Bundle.module.bundlePath.contains("xctest") ? "Resources/" : ""
+    }
 }

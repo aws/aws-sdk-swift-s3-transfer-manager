@@ -17,7 +17,7 @@ class DownloadBucketIntegTests: XCTestCase {
     static let bucketWithCustomKeys = "s3tm-download-bucket-integ-test-custom-keys-persistent"
     // The source directory URL used in setup to populate persistent S3 buckets.
     static let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-        "Resources/DownloadBucketIntegTestsResources/source"
+        "\(Bundle.module.bundlePath.contains("xctest") ? "Resources/" : "")DownloadBucketIntegTestsResources/source"
     )
 
     /*

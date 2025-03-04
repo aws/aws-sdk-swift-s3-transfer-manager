@@ -1,0 +1,26 @@
+{
+  "configurations" : [
+    {
+      "id" : "473E10B3-772B-499E-839E-35E4AB5F6D66",
+      "name" : "S3TransferManager Integration Tests on CI",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+
+    ]
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "S3TransferManagerIntegrationTests",
+        "name" : "S3TransferManagerIntegrationTests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -15,7 +15,7 @@ class UploadDirectoryIntegTests: XCTestCase {
     static let region = "us-west-2"
     // The source directory URL used by tests.
     static let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-        "Resources/UploadDirectoryTestsResources/source"
+        "\(Bundle.module.bundlePath.contains("xctest") ? "Resources/" : "")UploadDirectoryTestsResources/source"
     )
 
     // This setUp runs just once for the test class, before tests start execution.
