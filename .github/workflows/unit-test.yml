@@ -70,16 +70,20 @@ jobs:
             restore-keys: |
               1-${{ runner.os }}-${{ matrix.xcode }}-${{ hashFiles('Package.swift') }}
               1-${{ runner.os }}-${{ matrix.xcode }}-
-        - name: Print Package.swift
+        - name: Resolve Package Dependencies
           run: |
             cd aws-sdk-swift-s3-transfer-manager
-            cat Package.swift
+            xcodebuild -resolvePackageDependencies
+        - name: List Available Schemes
+          run: |
+            cd aws-sdk-swift-s3-transfer-manager
+            xcodebuild -list
         - name: Build and Run Unit Tests
           run: |
             cd aws-sdk-swift-s3-transfer-manager
             set -o pipefail && \
             NSUnbufferedIO=YES xcodebuild \
-              -scheme aws-sdk-swift-s3-transfer-manager-Package \
+              -scheme aws-sdk-swift-s3-transfer-manager \
               -destination '${{ matrix.destination }}' \
               -only-testing:S3TransferManagerUnitTests \
               test 2>&1 \
