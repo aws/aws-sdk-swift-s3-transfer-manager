@@ -30,14 +30,36 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "S3TransferManagerTests",
+            name: "S3TransferManagerUnitTests",
             dependencies: [
                 "S3TransferManager",
                 .product(name: "AWSS3", package: "aws-sdk-swift"),
                 .product(name: "Smithy", package: "smithy-swift"),
                 .product(name: "SmithyStreams", package: "smithy-swift"),
             ],
+            path: "Tests",
+            exclude: [
+                "IntegrationTests",
+                "ConcurrentIntegrationTests"
+            ],
+            sources: ["HelperFunctionUnitTests"],
             resources: [.copy("Resources")]
         ),
+        .testTarget(
+            name: "S3TransferManagerIntegrationTests",
+            dependencies: [
+                "S3TransferManager",
+                .product(name: "AWSS3", package: "aws-sdk-swift"),
+                .product(name: "Smithy", package: "smithy-swift"),
+                .product(name: "SmithyStreams", package: "smithy-swift"),
+            ],
+            path: "Tests",
+            exclude: ["HelperFunctionUnitTests"],
+            sources: [
+                "IntegrationTests",
+                "ConcurrentIntegrationTests"
+            ],
+            resources: [.copy("Resources")]
+        )
     ]
 )
