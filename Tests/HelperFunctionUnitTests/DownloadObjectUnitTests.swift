@@ -11,7 +11,7 @@ import Smithy
 import XCTest
 
 class DownloadObjectUnitTests: S3TMUnitTestCase {
-    let dummyInput = DownloadObjectInput(outputStream: OutputStream(), getObjectInput: GetObjectInput())
+    let dummyInput = DownloadObjectInput(outputStream: OutputStream(toMemory: ()), getObjectInput: GetObjectInput())
     let dummyProgressTracker = DownloadProgressTracker()
 
     // MARK: - writeData tests.
