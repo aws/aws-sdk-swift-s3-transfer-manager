@@ -174,15 +174,15 @@ public extension S3TransferManager {
 
         If originalDirURL is a symlink, we resolve it to get the resolvedDirURL because FileManager's contentsOfDirectory() doesn't work with symlink URL that points to a directory.
 
-        Then we retrieve relative path URLs of the directly nested files using resolvedDirURL, and _swap out_ the base URLs (stuff before relative path URL) with the originalDirURL.
+        Then we _swap out_ the base URLs (stuff before the last path component of directly nested file URLs) with the originalDirURL.
 
-        This is done because we want to keep symlink names in the paths of nested URLs. For example, say we have the file structure below:
+        Swapping base URL is done because we want to keep symlink names in the paths of nested URLs. For example, say we have the file structure below:
                 |- dir
                     |- symlinkToDir2
                 |- dir2
                     |- file.txt
 
-        If dir/ is the source directory being uploaded and TM is configured to follow symlinks and subdirectories, we want file.txt to have the path "dir/symlinkToDir2/file.txt" (notice the name of symlink in path leading to file.txt), rather than "dir2/file.txt". We then use the path "dir/symlinkToDir2/file.txt" to resolve the object key to upload the file with.
+        If dir/ is the source directory being uploaded and TM is configured to follow symlinks and subdirectories, we want file.txt to have the path "dir/symlinkToDir2/file.txt" (notice the name of symlink in path leading to file.txt), rather than "dir2/file.txt". That path ("dir/symlinkToDir2/file.txt") is then used to resolve the object key to upload the file with.
      */
     internal func getDirectlyNestedURLs(
         in originalDirURL: URL,
@@ -193,13 +193,11 @@ public extension S3TransferManager {
         // Get file URLs (files, symlinks, directories, etc.) exactly one level below the provided directory URL.
         let directlyNestedURLs = try FileManager.default.contentsOfDirectory(
             at: resolvedDirURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
-            // If source directory URL is symlink, get relative path URLs.
-            options: [.producesRelativePathURLs]
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]
         )
         return directlyNestedURLs.map {
-            // Swap out the base URL in relative path URLs; swap out resolvedDirURL with the originalDirURL.
-            URL(string: originalDirURL.absoluteString.appendingPathComponent($0.relativePath))!
+            // Swap the base URL.
+            URL(string: originalDirURL.absoluteString.appendingPathComponent($0.lastPathComponent))!
         }
     }
 
