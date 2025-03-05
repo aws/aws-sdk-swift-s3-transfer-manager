@@ -41,8 +41,8 @@ class ConcurrentUploadObjectIntegTests: XCTestCase {
         ))
 
         // Create temporary directory to store the temporary files.
-        temporaryFilesDirectoryURL = FileManager.default.temporaryDirectory.appending(
-            path: "concurrentUploadObjectIntegTest-\(uuid)"
+        temporaryFilesDirectoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "concurrentUploadObjectIntegTest-\(uuid)"
         )
         try FileManager.default.createDirectory(
             at: temporaryFilesDirectoryURL,
@@ -52,7 +52,7 @@ class ConcurrentUploadObjectIntegTests: XCTestCase {
         // Create sparse files in temporary directory.
         for fileNum in 1...numFiles {
             let fileName = "\(fileNamePrefix)\(fileNum).dat"
-            let fileURL = temporaryFilesDirectoryURL.appending(path: fileName)
+            let fileURL = temporaryFilesDirectoryURL.appendingPathComponent(fileName)
 
             FileManager.default.createFile(atPath: fileURL.path, contents: nil, attributes: nil)
             guard let fileHandle = try? FileHandle(forWritingTo: fileURL) else {

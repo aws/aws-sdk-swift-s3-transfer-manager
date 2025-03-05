@@ -272,7 +272,7 @@ class DownloadObjectIntegTests: XCTestCase {
         // Create an outputstream with provided file name prefix in the temp directory.
         let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
         let fileName = "\(fileNamePrefix)_\(uuid)"
-        let fileURL = FileManager.default.temporaryDirectory.appending(path: fileName)
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         let outputStream = OutputStream(url: fileURL, append: true)!
 
         // Call runDownloadObject with appropriate arugments
@@ -320,7 +320,7 @@ class DownloadObjectIntegTests: XCTestCase {
         objectDataEnd: Int
     ) async throws {
         let fileHandle = try FileHandle(forReadingFrom: fileURL)
-        let actualData = try fileHandle.readToEnd()
+        let actualData = fileHandle.readDataToEndOfFile()
         let expectedData = objectData[objectDataStart...objectDataEnd]
         XCTAssertEqual(actualData, expectedData)
         try fileHandle.close()
@@ -346,7 +346,7 @@ class DownloadObjectIntegTests: XCTestCase {
         let s3tm = S3TransferManager(config: s3tmConfig)
 
         // Create DownloadObject input with an empty destination file.
-        let destinationFileURL = FileManager.default.temporaryDirectory.appending(path: "destination-\(uuid)")
+        let destinationFileURL = FileManager.default.temporaryDirectory.appendingPathComponent("destination-\(uuid)")
         let outputStream = OutputStream(url: destinationFileURL, append: true)!
         let getObjectInput = GetObjectInput(bucket: bucketName, key: key)
 

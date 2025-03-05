@@ -41,8 +41,8 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
 
         // Create the temporary download destination directory.
         let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
-        temporaryFilesDirectoryURL = FileManager.default.temporaryDirectory.appending(
-            path: "concurrentDownloadObjectIntegTest-\(uuid)"
+        temporaryFilesDirectoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "concurrentDownloadObjectIntegTest-\(uuid)"
         )
         try FileManager.default.createDirectory(
             at: temporaryFilesDirectoryURL,
@@ -51,8 +51,8 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
 
         // Create & save URLs for temporary download destination files.
         for fileNum in 1...numFiles {
-            fileURLs[fileNum] = temporaryFilesDirectoryURL.appending(
-                path: "\(fileNamePrefix)\(fileNum)"
+            fileURLs[fileNum] = temporaryFilesDirectoryURL.appendingPathComponent(
+                "\(fileNamePrefix)\(fileNum)"
             )
         }
 
@@ -127,13 +127,13 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
     private func validateDownloads() async throws {
         // Check all expected downloaded files exist.
         for fileNum in 1...numFiles {
-            let fileURL = temporaryFilesDirectoryURL.appending(
-                path: "\(fileNamePrefix)\(fileNum)"
+            let fileURL = temporaryFilesDirectoryURL.appendingPathComponent(
+                "\(fileNamePrefix)\(fileNum)"
             )
             // Assert on existence.
             XCTAssertTrue(
                 FileManager.default.fileExists(
-                    atPath: fileURL.path()
+                    atPath: fileURL.path
                 )
             )
             // Assert on size.
