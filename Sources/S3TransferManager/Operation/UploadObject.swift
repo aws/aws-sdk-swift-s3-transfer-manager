@@ -9,7 +9,6 @@ import AWSS3
 import class Foundation.DispatchSemaphore
 import class Foundation.NSLock
 import enum Smithy.ByteStream
-import func CoreFoundation.autoreleasepool
 import struct Foundation.Data
 
 public extension S3TransferManager {
@@ -226,9 +225,7 @@ public extension S3TransferManager {
                 // Wait & acquire semaphore before reading part data & adding a new uploadPart task for it.
                 await wait(semaphore)
                 do {
-                    // Using async autorelease to read and return part data ensures temporary things that were created to
-                    //   read the part data gets released as expected.
-                    let partData = try await autoreleasepoolAsync {
+                    let partData = try await {
                         let partOffset = (partNumber - 1) * partSize
                         // Either take full part size or remainder (only for the last part).
                         let resolvedPartSize = min(partSize, payloadSize - partOffset)
@@ -238,7 +235,7 @@ public extension S3TransferManager {
                             partOffset: partOffset,
                             byteStreamPartReader: byteStreamPartReader
                         )
-                    }
+                    }()
 
                     try Task.checkCancellation()
                     group.addTask {
@@ -362,23 +359,6 @@ public extension S3TransferManager {
                 errorFromMPUOperation: originalError,
                 errorFromFailedAbortMPUOperation: abortError
             )
-        }
-    }
-
-    // Async wrapper for autoreleasepool.
-    // Regular autoreleasepool doesn't allow async operations, hence this wrapper.
-    private func autoreleasepoolAsync<T>(_ operation: @escaping () async throws -> T) async throws -> T {
-        return try await withCheckedThrowingContinuation { continuation in
-            autoreleasepool {
-                let _: Task<Void, Never> = Task {
-                    do {
-                        let result = try await operation()
-                        continuation.resume(returning: result)
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
         }
     }
 
