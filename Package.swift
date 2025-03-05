@@ -29,10 +29,16 @@ let package = Package(
                 .product(name: "SmithyStreams", package: "smithy-swift"),
             ]
         ),
+        .target(name: "TestUtil"),
+        .testTarget(
+            name: "TestUtilTests",
+            dependencies: [ "TestUtil" ]
+        ),
         .testTarget(
             name: "S3TransferManagerUnitTests",
             dependencies: [
                 "S3TransferManager",
+                "TestUtil",
                 .product(name: "AWSS3", package: "aws-sdk-swift"),
                 .product(name: "Smithy", package: "smithy-swift"),
                 .product(name: "SmithyStreams", package: "smithy-swift"),
@@ -42,13 +48,13 @@ let package = Package(
                 "IntegrationTests",
                 "ConcurrentIntegrationTests"
             ],
-            sources: ["HelperFunctionUnitTests"],
-            resources: [.copy("Resources")]
+            sources: ["HelperFunctionUnitTests"]
         ),
         .testTarget(
             name: "S3TransferManagerIntegrationTests",
             dependencies: [
                 "S3TransferManager",
+                "TestUtil",
                 .product(name: "AWSS3", package: "aws-sdk-swift"),
                 .product(name: "Smithy", package: "smithy-swift"),
                 .product(name: "SmithyStreams", package: "smithy-swift"),
@@ -58,8 +64,7 @@ let package = Package(
             sources: [
                 "IntegrationTests",
                 "ConcurrentIntegrationTests"
-            ],
-            resources: [.copy("Resources")]
+            ]
         )
     ]
 )

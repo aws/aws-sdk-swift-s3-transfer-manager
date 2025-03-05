@@ -7,6 +7,7 @@
 
 import AWSS3
 import S3TransferManager
+@testable import TestUtil
 import XCTest
 
 class UploadDirectoryIntegTests: XCTestCase {
@@ -14,13 +15,15 @@ class UploadDirectoryIntegTests: XCTestCase {
     static var s3: S3Client! // The shared S3 client for tests.
     static let region = "us-west-2"
     // The source directory URL used by tests.
-    static let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-        "\(Bundle.module.bundlePath.contains("xctest") ? "Resources/" : "")UploadDirectoryTestsResources/source"
-    )
+    static var sourceURL: URL!
+    static var tempDir: URL!
 
     // This setUp runs just once for the test class, before tests start execution.
     // Instantiates shared S3TM and S3 client objects.
     override class func setUp() {
+        tempDir = setUpDirectoryForUploadDirectoryTests()
+        sourceURL = tempDir.appendingPathComponent("source")
+
         // Create a shared transfer manager instance.
         let tmSetupExpectation = XCTestExpectation(description: "S3 Transfer Manager setup complete")
         Task {
@@ -35,6 +38,15 @@ class UploadDirectoryIntegTests: XCTestCase {
             }
         }
         _ = XCTWaiter().wait(for: [tmSetupExpectation], timeout: 10)
+    }
+
+    // delete the temporary resources directory after all tests are run in the test class.
+    override class func tearDown() {
+        do {
+            try FileManager.default.removeItem(at: tempDir)
+        } catch {
+            XCTFail("Failed to delete temporary test resource directory: \(error)")
+        }
     }
 
     // Instance variables that point to same things as static variables.

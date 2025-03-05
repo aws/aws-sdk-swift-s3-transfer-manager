@@ -6,11 +6,16 @@
 //
 
 @testable import S3TransferManager
+@testable import TestUtil
 import XCTest
 
 class S3TMUnitTestCase: XCTestCase {
     // The shared transfer manager for tests.
     static var tm: S3TransferManager!
+    // The shared resources directory URL for download bucket unit tests.
+    static var downloadBucketTestsResourcesURL: URL!
+    // The shared resources directory URL for upload directory unit tests.
+    static var uploadDirectoryTestsResourcesURL: URL!
 
     // class method setUp() runs only once, rather than for every test.
     override class func setUp() {
@@ -24,6 +29,18 @@ class S3TMUnitTestCase: XCTestCase {
             }
         }
         _ = XCTWaiter().wait(for: [tmSetupExpectation], timeout: 5)
+        downloadBucketTestsResourcesURL = setUpDirectoryForDownloadBucketUnitTests()
+        uploadDirectoryTestsResourcesURL = setUpDirectoryForUploadDirectoryTests()
+    }
+
+    // delete the temporary resources directory after all tests are run in the test class.
+    override class func tearDown() {
+        do {
+            try FileManager.default.removeItem(at: downloadBucketTestsResourcesURL)
+            try FileManager.default.removeItem(at: uploadDirectoryTestsResourcesURL)
+        } catch {
+            XCTFail("Failed to delete temporary test resource directories: \(error)")
+        }
     }
 
     // MARK: - Shared test utility functions.
@@ -67,15 +84,5 @@ class S3TMUnitTestCase: XCTestCase {
                 XCTFail("Failed to delete test file: \(error)")
             }
         }
-    }
-
-    func resourceURLPrefix() -> String {
-        /*
-            Tests run in Xcode have resource files located in "Resources/Resources/..."
-            Tests run in terminal with `swift test` have resource files located in "Resources/..."
-            This is due to different test resource handling logic between Xcode and swift toolchain.
-            Return "Resources/" prefix if the resource URL contains "xctest". Return "" otherwise.
-         */
-        return Bundle.module.bundlePath.contains("xctest") ? "Resources/" : ""
     }
 }

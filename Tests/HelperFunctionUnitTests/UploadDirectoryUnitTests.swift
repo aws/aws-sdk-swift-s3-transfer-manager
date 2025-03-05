@@ -9,6 +9,12 @@
 import XCTest
 
 class UploadDirectoryUnitTests: S3TMUnitTestCase {
+    var resourceDirectoryURL: URL!
+
+    override func setUp() {
+        resourceDirectoryURL = UploadDirectoryUnitTests.uploadDirectoryTestsResourcesURL!
+    }
+
     /*
          The following file structure under Resources/UploadDirectoryTestsResources/ is used by multiple tests below.
 
@@ -39,13 +45,10 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
      */
 
     func testGetDirectlyNestedURLsWithDirectoryURL() throws {
-        let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources/source"
-        )
+        let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getDirectlyNestedURLs(in: sourceURL, isSymlink: false)
         let expectedURLs: Set<URL> = [
-            // .standardizedFileURL here just adds a trailing slash.
-            URL(string: sourceURL.absoluteString.appendingPathComponent("nested"))!.standardizedFileURL,
+            URL(string: sourceURL.absoluteString.appendingPathComponent("nested"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("a.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("symlinkToOutsideSourceDir"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("symlinkToSourceDir"))!,
@@ -59,13 +62,9 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
     }
 
     func testGetDirectlyNestedURLsWithSymlinkURLThatPointsToSourceDir() throws {
-        let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources/source/symlinkToSourceDir"
-        )
+        let sourceURL = resourceDirectoryURL.appendingPathComponent("source/symlinkToSourceDir")
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getDirectlyNestedURLs(in: sourceURL, isSymlink: true)
         let expectedURLs: Set<URL> = [
-            // .standardizedFileURL not needed for "nested" because sourceURL is symlink to a directory.
-            //  which makes returned URL not have trailing slash.
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("a.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("symlinkToOutsideSourceDir"))!,
@@ -99,9 +98,7 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
          - Symlinks that causes infinite loops
      */
     func testGetNestedFileURLsRecursiveAndFollowSymlinks() throws {
-        let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources/source"
-        )
+        let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
             in: sourceURL,
             recursive: true,
@@ -129,9 +126,7 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
          - source/a.txt
      */
     func testGetNestedFileURLsRecursiveOnly() throws {
-        let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources/source"
-        )
+        let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
             in: sourceURL,
             recursive: true,
@@ -155,9 +150,7 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
          - source/symlinkToFileD
      */
     func testGetNestedFileURLsFollowSymlinksOnly() throws {
-        let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources/source"
-        )
+        let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
             in: sourceURL,
             recursive: false,
@@ -179,9 +172,7 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
          - source/a.txt
      */
     func testGetNestedFileURLsNeitherOptionsSet() throws {
-        let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources/source"
-        )
+        let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
             in: sourceURL,
             recursive: false,
@@ -251,12 +242,9 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
     // Helpers for getResolvedObjectKey tests.
 
     private func getResolvedObjectKeyTestURLs() throws -> (fileURL: URL, dirURL: URL) {
-        let bundleURL = Bundle.module.resourceURL!.appendingPathComponent(
-            "\(resourceURLPrefix())UploadDirectoryTestsResources"
-        )
         return (
-            fileURL: bundleURL.appendingPathComponent("source/nested/nested2/d.txt"),
-            dirURL: bundleURL.appendingPathComponent("source")
+            fileURL: resourceDirectoryURL.appendingPathComponent("source/nested/nested2/d.txt"),
+            dirURL: resourceDirectoryURL.appendingPathComponent("source")
         )
     }
 

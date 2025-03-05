@@ -7,6 +7,7 @@
 
 import AWSS3
 import S3TransferManager
+@testable import TestUtil
 import XCTest
 
 class DownloadBucketIntegTests: XCTestCase {
@@ -16,9 +17,8 @@ class DownloadBucketIntegTests: XCTestCase {
     static let bucketWithRegularKeys = "s3tm-download-bucket-integ-test-regular-keys-persistent"
     static let bucketWithCustomKeys = "s3tm-download-bucket-integ-test-custom-keys-persistent"
     // The source directory URL used in setup to populate persistent S3 buckets.
-    static let sourceURL = Bundle.module.resourceURL!.appendingPathComponent(
-        "\(Bundle.module.bundlePath.contains("xctest") ? "Resources/" : "")DownloadBucketIntegTestsResources/source"
-    )
+    static var sourceURL: URL!
+    static var tempDir: URL!
 
     /*
          The following file structure under Resources/DownloadBucketIntegTestsResources/ is used by the setup below.
@@ -39,6 +39,9 @@ class DownloadBucketIntegTests: XCTestCase {
     //  a bucket with custom keys (delimiter "-" and prefix "pre").
     // No-op if buckets already exist.
     override class func setUp() {
+        tempDir = setUpDirectoryForDownloadBucketIntegTests()
+        sourceURL = tempDir.appendingPathComponent("source/")
+
         let bucketSetupWithRegularKeysExpectation = XCTestExpectation(
             description: "S3 test bucket setup complete with regular keys"
         )
@@ -130,6 +133,15 @@ class DownloadBucketIntegTests: XCTestCase {
             for: [bucketSetupWithRegularKeysExpectation, bucketSetupWithCustomKeysExpectation],
             timeout: 60
         )
+    }
+
+    // delete the temporary resources directory after all tests are run in the test class.
+    override class func tearDown() {
+        do {
+            try FileManager.default.removeItem(at: tempDir)
+        } catch {
+            XCTFail("Failed to delete temporary test resource directory: \(error)")
+        }
     }
 
     // Instance variables that point to same things as static variables.

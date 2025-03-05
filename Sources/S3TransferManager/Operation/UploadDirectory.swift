@@ -188,19 +188,19 @@ public extension S3TransferManager {
         in originalDirURL: URL,
         isSymlink: Bool
     ) throws -> [URL] {
-        // Resolve original directory URL if it's a symlink.
+        // Resolve original directory URL if it's a symlink. `FileManager::contentsOfDirectory` doesn't accept symlinks.
         let resolvedDirURL = isSymlink ? originalDirURL.resolvingSymlinksInPath() : originalDirURL
         // Get file URLs (files, symlinks, directories, etc.) exactly one level below the provided directory URL.
         let directlyNestedURLs = try FileManager.default.contentsOfDirectory(
             at: resolvedDirURL,
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey],
             // If source directory URL is symlink, get relative path URLs.
-            options: isSymlink ? [.producesRelativePathURLs] : []
+            options: [.producesRelativePathURLs]
         )
-        return isSymlink ? directlyNestedURLs.map {
+        return directlyNestedURLs.map {
             // Swap out the base URL in relative path URLs; swap out resolvedDirURL with the originalDirURL.
             URL(string: originalDirURL.absoluteString.appendingPathComponent($0.relativePath))!
-        } : directlyNestedURLs // Return without changing base URL if original URL wasn't a symlink.
+        }
     }
 
     private func uploadObjectFromURL(
