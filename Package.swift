@@ -46,7 +46,8 @@ let package = Package(
             path: "Tests",
             exclude: [
                 "IntegrationTests",
-                "ConcurrentIntegrationTests"
+                "ConcurrentIntegrationTests",
+                "TestUtilTests"
             ],
             sources: ["HelperFunctionUnitTests"]
         ),
@@ -60,10 +61,13 @@ let package = Package(
                 .product(name: "SmithyStreams", package: "smithy-swift"),
             ],
             path: "Tests",
-            exclude: ["HelperFunctionUnitTests"],
+            exclude: [
+                "HelperFunctionUnitTests",
+                "TestUtilTests"
+            ],
             sources: [
                 "IntegrationTests",
-                "ConcurrentIntegrationTests"
+                "ConcurrentIntegrationTests",
             ]
         )
     ]
