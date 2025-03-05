@@ -8,6 +8,11 @@ env:
   RUN_LARGE_S3TM_UPLOAD_OBJECT_TESTS: "YES"
   RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS: "YES"
 
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
 jobs:
   apple:
     runs-on: ${{ matrix.runner }}
