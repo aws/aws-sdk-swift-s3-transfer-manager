@@ -98,7 +98,6 @@ jobs:
         os:
           - jammy
         version:
-          - "5.9"
           - "6.0"
     steps:
       - name: Checkout aws-sdk-swift-s3-transfer-manager
