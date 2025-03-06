@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import XCTest
 @testable import TestUtil
+import XCTest
 
 class DownloadBucketUnitTestSetupUtilTests: XCTestCase {
     var resourceDirectory: URL!

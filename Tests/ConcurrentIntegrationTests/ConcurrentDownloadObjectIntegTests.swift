@@ -7,8 +7,8 @@
 
 import AWSS3
 import S3TransferManager
-import XCTest
 @testable import TestUtil
+import XCTest
 
 class ConcurrentDownloadObjectIntegTests: XCTestCase {
     /*

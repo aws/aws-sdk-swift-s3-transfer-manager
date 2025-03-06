@@ -8,8 +8,8 @@
 import AWSS3
 import S3TransferManager
 import SmithyStreams
-import XCTest
 @testable import TestUtil
+import XCTest
 
 // Set "RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS" environment variable to "YES" to run > 100MB tests.
 class DownloadObjectIntegTests: XCTestCase {
