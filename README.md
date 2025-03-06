@@ -48,7 +48,7 @@ dependencies: [
 ```
 targets: [
     .target(
-        name: "YourPackageThatUsesS3TM",
+        name: "YourTargetThatUsesS3TM",
         dependencies: [
             .product(name: "S3TransferManager", package: "aws-sdk-swift-s3-transfer-manager")
         ]
