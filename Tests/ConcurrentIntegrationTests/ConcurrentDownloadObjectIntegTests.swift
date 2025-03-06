@@ -60,8 +60,10 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
         }
 
         // Setup the persistent bucket with generated files if bucket doesn't exist.
-        let bucketExists = try await bucketWithPrefixExists(prefix: bucketNamePrefix, region: region)
-        if (!bucketExists) {
+        let fullBucketName = try await bucketWithPrefixExists(prefix: bucketNamePrefix, region: region)
+        if let fullBucketName {
+            bucketName = fullBucketName
+        } else {
             _ = try await s3.createBucket(input: CreateBucketInput(
                 bucket: bucketName,
                 createBucketConfiguration: S3ClientTypes.CreateBucketConfiguration(

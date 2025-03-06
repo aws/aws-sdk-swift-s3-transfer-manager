@@ -56,7 +56,7 @@ class UploadDirectoryIntegTests: XCTestCase {
     var sourceURL: URL!
 
     // The bucket name used by a given test.
-    private let bucketName = "s3tm-upload-directory-integ-test-" + UUID().uuidString.split(
+    private let bucketName = "temp-s3tm-upload-directory-integ-test-" + UUID().uuidString.split(
         separator: "-"
     ).first!.lowercased()
 

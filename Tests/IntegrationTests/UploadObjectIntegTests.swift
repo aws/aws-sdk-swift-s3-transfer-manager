@@ -16,7 +16,7 @@ class UploadObjectIntegTests: XCTestCase {
     static var tm: S3TransferManager! // The shared transfer manager for tests.
     static var s3: S3Client! // The shared S3 client for tests.
     static let region = "us-west-2"
-    static let bucketName = "s3tm-upload-object-integ-test-"
+    static let bucketName = "temp-s3tm-upload-object-integ-test-"
     + UUID().uuidString.split(separator: "-").first!.lowercased()
 
     // This setUp runs just once for the test class, before tests start execution.

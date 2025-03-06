@@ -61,11 +61,12 @@ class DownloadBucketIntegTests: XCTestCase {
             tm = S3TransferManager(config: tmConfig)
 
             // Setup bucket with regular keys.
-            let regularBucketExists = try await bucketWithPrefixExists(
+            let fullRegularBucketName = try await bucketWithPrefixExists(
                 prefix: bucketWithRegularKeysPrefix,
                 region: region
             )
-            if (regularBucketExists) {
+            if let fullRegularBucketName {
+                bucketWithRegularKeys = fullRegularBucketName
                 bucketSetupWithRegularKeysExpectation.fulfill()
             } else {
                 do {
@@ -100,11 +101,12 @@ class DownloadBucketIntegTests: XCTestCase {
             }
 
             // Setup bucket with custom keys.
-            let customBucketExists = try await bucketWithPrefixExists(
+            let fullCustomBucketName = try await bucketWithPrefixExists(
                 prefix: bucketWithCustomKeysPrefix,
                 region: region
             )
-            if (customBucketExists) {
+            if let fullCustomBucketName {
+                bucketWithCustomKeys = fullCustomBucketName
                 bucketSetupWithCustomKeysExpectation.fulfill()
             } else {
                 do {

@@ -18,7 +18,7 @@ class ConcurrentUploadObjectIntegTests: XCTestCase {
     var temporaryFilesDirectoryURL: URL!
 
     let region = "us-west-2"
-    let bucketNamePrefix = "s3tm-concurrent-upload-object-integ-test-"
+    let bucketNamePrefix = "temp-s3tm-concurrent-upload-object-integ-test-"
     let fileNamePrefix = "s3tm-concurrent-upload-object-integ-test-file-"
 
     // Change the two values below to modify test behavior.

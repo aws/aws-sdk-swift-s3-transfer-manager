@@ -40,8 +40,9 @@ class DownloadObjectIntegTests: XCTestCase {
 
         Task {
             s3 = try S3Client(region: region)
-            let bucketExists = try await bucketWithPrefixExists(prefix: bucketNamePrefix, region: region)
-            if (bucketExists) {
+            let fullBucketName = try await bucketWithPrefixExists(prefix: bucketNamePrefix, region: region)
+            if let fullBucketName {
+                bucketName = fullBucketName
                 bucketSetupExpectation.fulfill()
                 return
             } else {
