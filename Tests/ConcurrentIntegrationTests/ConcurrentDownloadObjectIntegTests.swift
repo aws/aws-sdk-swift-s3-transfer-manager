@@ -8,6 +8,7 @@
 import AWSS3
 import S3TransferManager
 import XCTest
+@testable import TestUtil
 
 class ConcurrentDownloadObjectIntegTests: XCTestCase {
     /*
@@ -26,7 +27,8 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
     var fileURLs: [Int: URL] = [:]
 
     let region = "us-west-2"
-    let bucketName = "s3tm-concurrent-download-object-integ-test-persistent"
+    var bucketName: String!
+    let bucketNamePrefix = "s3tm-concurrent-download-object-integ-test-persistent-"
     let fileNamePrefix = "s3tm-concurrent-download-object-integ-test-file-"
 
     // Change the two values below to modify test behavior.
@@ -39,8 +41,9 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
         let tmConfig = try await S3TransferManagerConfig(s3Client: s3)
         tm = S3TransferManager(config: tmConfig)
 
-        // Create the temporary download destination directory.
         let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
+        bucketName = bucketNamePrefix + uuid
+        // Create the temporary download destination directory.
         temporaryFilesDirectoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
             "concurrentDownloadObjectIntegTest-\(uuid)"
         )
@@ -57,9 +60,8 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
         }
 
         // Setup the persistent bucket with generated files if bucket doesn't exist.
-        do {
-            _ = try await s3.headBucket(input: HeadBucketInput(bucket: bucketName))
-        } catch {
+        let bucketExists = try await bucketWithPrefixExists(prefix: bucketNamePrefix, region: region)
+        if (!bucketExists) {
             _ = try await s3.createBucket(input: CreateBucketInput(
                 bucket: bucketName,
                 createBucketConfiguration: S3ClientTypes.CreateBucketConfiguration(

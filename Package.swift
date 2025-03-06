@@ -29,7 +29,10 @@ let package = Package(
                 .product(name: "SmithyStreams", package: "smithy-swift"),
             ]
         ),
-        .target(name: "TestUtil"),
+        .target(
+            name: "TestUtil",
+            dependencies: [ .product(name: "AWSS3", package: "aws-sdk-swift") ]
+        ),
         .testTarget(
             name: "TestUtilTests",
             dependencies: [ "TestUtil" ]

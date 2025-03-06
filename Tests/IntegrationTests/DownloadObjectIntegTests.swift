@@ -9,12 +9,14 @@ import AWSS3
 import S3TransferManager
 import SmithyStreams
 import XCTest
+@testable import TestUtil
 
 // Set "RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS" environment variable to "YES" to run > 100MB tests.
 class DownloadObjectIntegTests: XCTestCase {
     static var s3: S3Client!
     static let region = "us-west-2"
-    static let bucketName = "s3tm-download-object-integ-test-persistent-bucket"
+    static var bucketName: String!
+    static let bucketNamePrefix = "s3tm-download-object-integ-test-persistent-"
     static let mpuObjectKey = "MPU-100MB"
     static let nonMPUObjectKey = "NonMPU-100MB"
     static var objectData: Data!
@@ -23,6 +25,9 @@ class DownloadObjectIntegTests: XCTestCase {
     // Create a shared S3 test bucket, and upload 100MB with MPU & 100MB w/o MPU.
     // Skipped entirely if bucket already exists.
     override class func setUp() {
+        let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
+        bucketName = bucketNamePrefix + uuid
+
         let bucketSetupExpectation = XCTestExpectation(description: "S3 test bucket setup complete")
         // Create 100MB Data in-memory.
         let patternedByteData = Data([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22])
@@ -35,11 +40,11 @@ class DownloadObjectIntegTests: XCTestCase {
 
         Task {
             s3 = try S3Client(region: region)
-            do {
-                _ = try await s3.headBucket(input: HeadBucketInput(bucket: bucketName))
-                bucketSetupExpectation.fulfill() // Skip if bucket exists (headBucket didn't throw error).
+            let bucketExists = try await bucketWithPrefixExists(prefix: bucketNamePrefix, region: region)
+            if (bucketExists) {
+                bucketSetupExpectation.fulfill()
                 return
-            } catch {
+            } else {
                 do {
                     // If headBucket threw error; it means bucket doesnt' exist; create bucket & upload objects.
                     _ = try await s3.createBucket(input: CreateBucketInput(

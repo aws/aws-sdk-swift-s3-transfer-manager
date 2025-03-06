@@ -14,8 +14,10 @@ class DownloadBucketIntegTests: XCTestCase {
     static var tm: S3TransferManager!
     static var s3: S3Client!
     static let region = "us-west-2"
-    static let bucketWithRegularKeys = "s3tm-download-bucket-integ-test-regular-keys-persistent"
-    static let bucketWithCustomKeys = "s3tm-download-bucket-integ-test-custom-keys-persistent"
+    static var bucketWithRegularKeys: String!
+    static var bucketWithCustomKeys: String!
+    static let bucketWithRegularKeysPrefix = "s3tm-download-bucket-integ-test-reg-keys-persistent-"
+    static let bucketWithCustomKeysPrefix = "s3tm-download-bucket-integ-test-custom-keys-persistent-"
     // The source directory URL used in setup to populate persistent S3 buckets.
     static var sourceURL: URL!
     static var tempDir: URL!
@@ -40,7 +42,11 @@ class DownloadBucketIntegTests: XCTestCase {
     // No-op if buckets already exist.
     override class func setUp() {
         tempDir = setUpDirectoryForDownloadBucketIntegTests()
-        sourceURL = tempDir.appendingPathComponent("source/")
+        sourceURL = tempDir.appendingPathComponent("source")
+
+        let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
+        bucketWithRegularKeys = bucketWithRegularKeysPrefix + uuid
+        bucketWithCustomKeys = bucketWithCustomKeysPrefix + uuid
 
         let bucketSetupWithRegularKeysExpectation = XCTestExpectation(
             description: "S3 test bucket setup complete with regular keys"
@@ -55,10 +61,13 @@ class DownloadBucketIntegTests: XCTestCase {
             tm = S3TransferManager(config: tmConfig)
 
             // Setup bucket with regular keys.
-            do {
-                _ = try await s3.headBucket(input: HeadBucketInput(bucket: bucketWithRegularKeys))
+            let regularBucketExists = try await bucketWithPrefixExists(
+                prefix: bucketWithRegularKeysPrefix,
+                region: region
+            )
+            if (regularBucketExists) {
                 bucketSetupWithRegularKeysExpectation.fulfill()
-            } catch {
+            } else {
                 do {
                     // Create bucket.
                     _ = try await s3.createBucket(input: CreateBucketInput(
@@ -91,10 +100,13 @@ class DownloadBucketIntegTests: XCTestCase {
             }
 
             // Setup bucket with custom keys.
-            do {
-                _ = try await s3.headBucket(input: HeadBucketInput(bucket: bucketWithCustomKeys))
+            let customBucketExists = try await bucketWithPrefixExists(
+                prefix: bucketWithCustomKeysPrefix,
+                region: region
+            )
+            if (customBucketExists) {
                 bucketSetupWithCustomKeysExpectation.fulfill()
-            } catch {
+            } else {
                 do {
                     // Create bucket.
                     _ = try await s3.createBucket(input: CreateBucketInput(
