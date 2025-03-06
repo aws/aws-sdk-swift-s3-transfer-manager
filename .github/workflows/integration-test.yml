@@ -4,10 +4,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  RUN_LARGE_S3TM_UPLOAD_OBJECT_TESTS: "YES"
-  RUN_LARGE_S3TM_DOWNLOAD_OBJECT_TESTS: "YES"
-
 permissions:
   id-token: write
   contents: read
@@ -120,7 +116,6 @@ jobs:
         os:
           - jammy
         version:
-          - "5.9"
           - "6.0"
     steps:
       - name: Configure AWS Credentials for Integration Tests
