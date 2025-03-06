@@ -30,11 +30,31 @@ As mentioned above, S3TM allows monitoring the progress of all 4 operations abov
 
 ### Add the dependency to your Xcode project
 
-**_TODO AFTER GITHUB REPO CREATION: Add rough outline of steps needed to add the S3TM dependency to an Xcode project_**
+1. Open your project in Xcode and click on your `.xcodeproj` file, located at the top of the file navigator on the left pane.
+2. Click the project name that appears on the left pane of the `.xcodeproj` file window.
+3. Click on `Package Dependencies` tab, and click `+` button.
+4. In `Search of Enter Package URL` search bar, enter `git@github.com:aws/aws-sdk-swift-s3-transfer-manager.git`.
+5. Wait for package to load, and once it's loaded, choose the target you want to add the `S3TransferManager` module to.
 
 ### Add the dependency to your Swift package
 
-**_TODO AFTER GITHUB REPO CREATION: Add example Package.swift contents_**
+1. Add below to your package definition:
+```
+dependencies: [
+    .package(url: "https://github.com/aws/aws-sdk-swift-s3-transfer-manager.git", from: "<VERSION_STRING>")
+],
+```
+2. Add `S3TransferManager` module dependency to the target that needs it. For example:
+```
+targets: [
+    .target(
+        name: "YourPackageThatUsesS3TM",
+        dependencies: [
+            .product(name: "S3TransferManager", package: "aws-sdk-swift-s3-transfer-manager")
+        ]
+    )
+]
+```
 
 ### Initialize the S3 Transfer Manager
 
