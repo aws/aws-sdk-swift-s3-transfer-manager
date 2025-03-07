@@ -264,7 +264,7 @@ public extension S3TransferManager {
         // Get absolute string of file URL & dir URL; remove dir URL prefix from file URL to get the relative path.
         let dirAbsoluteString = dir.absoluteString
         let fileAbsoluteString = url.absoluteString
-        var relativePath = fileAbsoluteString.removePrefix(dirAbsoluteString)
+        var relativePath = fileAbsoluteString.removePrefix(dirAbsoluteString).removePrefix(defaultPathSeparator())
         // Step 4: if user configured a custom s3Delimiter, replace all instances of system default path separator "/" in the relative path from step 3 with the custom s3Delimiter.
         if input.s3Delimiter != defaultPathSeparator() {
             relativePath = relativePath.replacingOccurrences(of: defaultPathSeparator(), with: input.s3Delimiter)
