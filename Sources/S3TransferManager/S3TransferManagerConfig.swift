@@ -33,8 +33,8 @@ public class S3TransferManagerConfig {
     ///    - multipartDownloadType: Specifies the behavior of multipart download operations. Default value is `.part`, which configures individual `getObject` calls to use part numbers for multipart downloads. The other option is `.range`, which uses the byte range of the S3 object for multipart downloads. If what you want to download was uploaded without using multipart upload (therefore there's no part number available), then you should use `.range`.
     public init(
         s3Client: S3Client? = nil,
-        targetPartSizeBytes: Int = 8_000_000,
-        multipartUploadThresholdBytes: Int = 16_000_000,
+        targetPartSizeBytes: Int = 8 * 1024 * 1024,
+        multipartUploadThresholdBytes: Int = 16 * 1024 * 1024,
         checksumValidationEnabled: Bool = true,
         checksumAlgorithm: S3ClientTypes.ChecksumAlgorithm = .crc32,
         multipartDownloadType: MultipartDownloadType = .part
