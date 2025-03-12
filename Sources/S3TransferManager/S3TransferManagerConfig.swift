@@ -6,6 +6,9 @@
 //
 
 import AWSS3
+import AWSClientRuntime
+import ClientRuntime
+import SmithyHTTPAPI
 
 /// The config object for `S3TransferManager`.
 public class S3TransferManagerConfig {
@@ -47,6 +50,7 @@ public class S3TransferManagerConfig {
         } else {
             self.s3ClientConfig = try await S3Client.S3ClientConfiguration()
         }
+        self.s3ClientConfig.addInterceptorProvider(_S3TransferManagerInterceptorProvider())
         self.s3Client = S3Client(config: s3ClientConfig!)
         self.targetPartSizeBytes = targetPartSizeBytes
         self.multipartUploadThresholdBytes = multipartUploadThresholdBytes
@@ -62,4 +66,22 @@ public enum MultipartDownloadType {
     case range // Range HTTP header w/ getObject calls.
     /// Configures `S3TransferManager` to download an object from S3 using part numbers.
     case part // partNumber HTTP query parameter w/ getObject calls.
+}
+
+/// The interceptor provider that provides intercpetor for requests sent by `S3TransferManager`. For internal use only.
+public class _S3TransferManagerInterceptorProvider: HttpInterceptorProvider {
+    public func create<InputType, OutputType>() -> any Interceptor<InputType, OutputType, HTTPRequest, HTTPResponse> {
+        return _S3TransferManagerInterceptor()
+    }
+}
+
+/// The interceptor used to customize requests sent by `S3TransferManager`. For internal use only.
+public class _S3TransferManagerInterceptor<InputType, OutputType>: Interceptor {
+    public typealias RequestType = HTTPRequest
+    public typealias ResponseType = HTTPResponse
+
+    // Set business metrics feature ID for S3 Transfer Manager before serialization.
+    public func modifyBeforeSerialization(context: some MutableInput<InputType>) async throws {
+        context.getAttributes().businessMetrics = ["S3_TRANSFER": "G"]
+    }
 }

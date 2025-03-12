@@ -25,8 +25,11 @@ let package = Package(
             name: "S3TransferManager",
             dependencies: [
                 .product(name: "AWSS3", package: "aws-sdk-swift"),
+                .product(name: "AWSClientRuntime", package: "aws-sdk-swift"),
                 .product(name: "Smithy", package: "smithy-swift"),
+                .product(name: "SmithyHTTPAPI", package: "smithy-swift"),
                 .product(name: "SmithyStreams", package: "smithy-swift"),
+                .product(name: "ClientRuntime", package: "smithy-swift")
             ]
         ),
         .target(
