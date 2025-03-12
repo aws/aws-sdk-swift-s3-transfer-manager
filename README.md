@@ -68,16 +68,15 @@ let s3tm = try await S3TransferManager()
 Or you could pass the config object to the initializer to customize S3TM by doing this:
 
 ```swift
-// Create the custom S3 client that you want S3TM to use.
-let s3ClientConfig = try await S3Client.S3ClientConfiguration(
+// Create the custom S3 client config that you want S3TM to use.
+let customS3ClientConfig = try await S3Client.S3ClientConfiguration(
     region: "some-region",
     . . . custom S3 client configurations . . .
 )
-let customS3Client = S3Client(config: s3ClientConfig)
 
-// Create the custom S3TM config with the S3 client initialized above.
+// Create the custom S3TM config with the S3 client config initialized above.
 let s3tmConfig = try await S3TransferManagerConfig(
-    s3Client: customS3Client, // CUstom S3 client is configured here.
+    s3ClientConfig: customS3ClientConfig,
     targetPartSizeBytes: 10 * 1024 * 1024, // 10MB part size.
     multipartUploadThresholdBytes: 100 * 1024 * 1024, // 100MB threshold.
     checksumValidationEnabled: true,

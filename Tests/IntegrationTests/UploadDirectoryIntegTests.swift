@@ -30,7 +30,7 @@ class UploadDirectoryIntegTests: XCTestCase {
             do {
                 s3 = try S3Client(region: region)
                 tm = try await S3TransferManager(config: S3TransferManagerConfig(
-                    s3Client: S3Client(region: region)
+                    s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
                 ))
                 tmSetupExpectation.fulfill()
             } catch {
