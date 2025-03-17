@@ -264,7 +264,7 @@ public extension S3TransferManager {
         progressTracker: DownloadProgressTracker
     ) async throws {
         // Size of batch is same as the semaphore limit.
-        let batchSize = S3TMSemaphoreManager.Device.maxConcurrentTasksPerBucket
+        let batchSize = concurrentTaskLimit
         // Starting part number.
         var currentBatchStart = 2
 
@@ -407,7 +407,7 @@ public extension S3TransferManager {
         - (objectSize % config.targetPartSizeBytes == 0 ? 1 : 0)
 
         // Size of batch is same as the semaphore limit.
-        let batchSize = S3TMSemaphoreManager.Device.maxConcurrentTasksPerBucket
+        let batchSize = concurrentTaskLimit
         var currentBatchStart = 0
 
         // Loop until all segments are retrieved and processed in batches.

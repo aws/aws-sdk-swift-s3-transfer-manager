@@ -14,27 +14,19 @@ import class Foundation.DispatchSemaphore
     Because each child task only makes a single request with payload size smaller than or equal to `config.targetPartSizeBytes`, making use of built-in FIFO queue on semaphore waits & built-in request FIFO queue on HTTP client should work well enough to prevent request timeouts while still being performant.
  */
 internal actor S3TMSemaphoreManager {
+    // This value comes from the S3 client config value provided to S3TransferManagerConfig.
+    internal var concurrentTaskLimit: Int
+    // Map of each bucke name to a dedicated semaphore.
+    private var semaphores: [String: SemaphoreInfo] = [:]
+
+    internal init(concurrerntTaskLimit: Int) {
+        self.concurrentTaskLimit = concurrerntTaskLimit
+    }
+
     private struct SemaphoreInfo {
         let semaphore: DispatchSemaphore
         var useCount: Int
     }
-
-    // Optimizations & configurability for elaborate concurrent task limit can be done additively.
-    internal enum Device {
-        static let maxConcurrentTasksPerBucket: Int = {
-            #if os(macOS) || os(Linux)
-                return 6 // Default maximum connections per host for URLSession.
-            #elseif os(watchOS)
-                return 2
-            #else  // iOS, iPadOS, tvOS.
-                return 4
-            #endif
-        }()
-    }
-
-    // Map of each bucke name to a dedicated semaphore.
-    private var semaphores: [String: SemaphoreInfo] = [:]
-    private let maxConcurrentTasksPerBucket = Device.maxConcurrentTasksPerBucket
 
     // Creates and/or returns the semaphore for a given bucket name.
     internal func getSemaphoreInstance(forBucket bucketName: String) -> DispatchSemaphore {
@@ -47,7 +39,7 @@ internal actor S3TMSemaphoreManager {
             return info.semaphore
         } else {
             // Create new semaphore and return it.
-            let newSemaphore = DispatchSemaphore(value: maxConcurrentTasksPerBucket)
+            let newSemaphore = DispatchSemaphore(value: concurrentTaskLimit)
             semaphores[bucketName] = SemaphoreInfo(
                 semaphore: newSemaphore,
                 useCount: 1

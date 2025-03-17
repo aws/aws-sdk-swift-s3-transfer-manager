@@ -121,10 +121,10 @@ class DownloadObjectIntegTests: XCTestCase {
     func testDownloadObject_UploadedWithMPU_SinglePartGET() async throws {
         try await runTest(
             withDownloadType: .part,
-            withPartNumber: 14,
+            withPartNumber: 13,
             withKey: mpuObjectKey,
             withFileNamePrefix: "testDownloadObject_UploadedWithMPU_SinglePartGET",
-            objectDataStart: 104_000_000, // 13 parts * 8 MB part size.
+            objectDataStart: 100_663_296, // 12 parts * 8 MB part size.
             objectDataEnd: 100 * 1024 * 1024 - 1
         )
     }

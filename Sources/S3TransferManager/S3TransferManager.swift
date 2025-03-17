@@ -26,11 +26,14 @@ import struct Smithy.SwiftLogger
 public class S3TransferManager {
     internal let config: S3TransferManagerConfig
     internal let logger: SwiftLogger
-    internal let semaphoreManager = S3TMSemaphoreManager()
+    internal let semaphoreManager: S3TMSemaphoreManager
+    internal let concurrentTaskLimit: Int
 
     /// Initializes `S3TransferManager` with the default configuration.
     public init() async throws {
         self.config = try await S3TransferManagerConfig()
+        self.concurrentTaskLimit = config.s3ClientConfig.httpClientConfiguration.maxConnections
+        self.semaphoreManager = S3TMSemaphoreManager(concurrerntTaskLimit: concurrentTaskLimit)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 
@@ -42,6 +45,8 @@ public class S3TransferManager {
         config: S3TransferManagerConfig
     ) {
         self.config = config
+        self.concurrentTaskLimit = config.s3ClientConfig.httpClientConfiguration.maxConnections
+        self.semaphoreManager = S3TMSemaphoreManager(concurrerntTaskLimit: concurrentTaskLimit)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 

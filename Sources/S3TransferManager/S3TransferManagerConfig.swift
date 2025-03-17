@@ -51,7 +51,7 @@ public class S3TransferManagerConfig {
             self.s3ClientConfig = try await S3Client.S3ClientConfiguration()
         }
         self.s3ClientConfig.addInterceptorProvider(_S3TransferManagerInterceptorProvider())
-        self.s3Client = S3Client(config: s3ClientConfig!)
+        self.s3Client = S3Client(config: self.s3ClientConfig)
         self.targetPartSizeBytes = targetPartSizeBytes
         self.multipartUploadThresholdBytes = multipartUploadThresholdBytes
         self.checksumValidationEnabled = checksumValidationEnabled

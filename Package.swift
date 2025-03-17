@@ -17,8 +17,8 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", exact: "1.2.28"),
-        .package(url: "https://github.com/awslabs/smithy-swift.git", exact: "0.119.0"),
+        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", exact: "1.2.39"),
+        .package(url: "https://github.com/awslabs/smithy-swift.git", exact: "0.123.0"),
     ],
     targets: [
         .target(
