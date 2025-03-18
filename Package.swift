@@ -5,10 +5,10 @@ import PackageDescription
 let package = Package(
     name: "aws-sdk-swift-s3-transfer-manager",
     platforms: [
-        .macOS(.v10_15),
-        .iOS(.v13),
-        .tvOS(.v13),
-        .watchOS(.v6)
+        .macOS(.v12),
+        .iOS(.v16),
+        .tvOS(.v16),
+        .watchOS(.v9)
     ],
     products: [
         .library(
@@ -17,8 +17,8 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", exact: "1.2.39"),
-        .package(url: "https://github.com/awslabs/smithy-swift.git", exact: "0.123.0"),
+        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.2.39"),
+        .package(url: "https://github.com/awslabs/smithy-swift.git", from: "0.123.0"),
     ],
     targets: [
         .target(
