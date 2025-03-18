@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-import AWSS3
 import AWSClientRuntime
+import AWSS3
 import ClientRuntime
 import SmithyHTTPAPI
 
@@ -69,14 +69,14 @@ public enum MultipartDownloadType {
 }
 
 /// The interceptor provider that provides intercpetor for requests sent by `S3TransferManager`. For internal use only.
-public class _S3TransferManagerInterceptorProvider: HttpInterceptorProvider {
+public class _S3TransferManagerInterceptorProvider: HttpInterceptorProvider { // swiftlint:disable:this type_name
     public func create<InputType, OutputType>() -> any Interceptor<InputType, OutputType, HTTPRequest, HTTPResponse> {
         return _S3TransferManagerInterceptor()
     }
 }
 
 /// The interceptor used to customize requests sent by `S3TransferManager`. For internal use only.
-public class _S3TransferManagerInterceptor<InputType, OutputType>: Interceptor {
+public class _S3TransferManagerInterceptor<InputType, OutputType>: Interceptor { // swiftlint:disable:this type_name
     public typealias RequestType = HTTPRequest
     public typealias ResponseType = HTTPResponse
 
