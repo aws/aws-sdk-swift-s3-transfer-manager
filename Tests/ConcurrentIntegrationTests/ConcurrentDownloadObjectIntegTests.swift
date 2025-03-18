@@ -63,6 +63,7 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
         if let fullBucketName {
             bucketName = fullBucketName
         } else {
+            s3 = try S3Client(region: region)
             _ = try await s3.createBucket(input: CreateBucketInput(
                 bucket: bucketName,
                 createBucketConfiguration: S3ClientTypes.CreateBucketConfiguration(
