@@ -88,7 +88,10 @@ public struct LoggingTransferListener: TransferListener {
         let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
         // Example progress bar string: |==========          | 50.0%
         let barWidth = 20
-        let ratio = Double(singleObjectSnapshot.transferredBytes) / Double(singleObjectSnapshot.totalBytes!)
+        let totalBytes = Double(singleObjectSnapshot.totalBytes!)
+        let ratio = totalBytes > 0
+        ? (Double(singleObjectSnapshot.transferredBytes) / totalBytes)
+        : 1
         // (X / 20) = (transferredBytes / totalBytes) where X is the number of "=" we want.
         let filledCount = Int(ratio * Double(barWidth))
         let emptyCount = barWidth - filledCount
