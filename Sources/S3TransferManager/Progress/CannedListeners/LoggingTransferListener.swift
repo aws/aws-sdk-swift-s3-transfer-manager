@@ -105,15 +105,6 @@ public struct LoggingTransferListener: TransferListener {
     // Helper function that logs provided message with operation name & operation ID prefix.
     private func logS3TMOperation(input: any TransferInput, message: String) {
         let transferInputType = TransferInputType(from: input)
-        switch transferInputType {
-        case .uploadObject(let uploadObjectInput):
-            logger.info("[UploadObject ID: \(uploadObjectInput.operationID)] \(message)")
-        case .downloadObject(let downloadObjectInput):
-            logger.info("[DownloadObject ID: \(downloadObjectInput.operationID)] \(message)")
-        case .uploadDirectory(let uploadDirectoryInput):
-            logger.info("[UploadDirectory ID: \(uploadDirectoryInput.operationID)] \(message)")
-        case .downloadBucket(let downloadBucketInput):
-            logger.info("[DownloadBucket ID: \(downloadBucketInput.operationID)] \(message)")
-        }
+        logger.info("[\(transferInputType) ID: \(input.operationID)] \(message)")
     }
 }

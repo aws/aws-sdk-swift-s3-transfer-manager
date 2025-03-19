@@ -17,23 +17,34 @@
 ///     // downloadInput is typed as DownloadObjectInput
 /// }
 /// ```
-public enum TransferInputType {
+public enum TransferInputType: CustomStringConvertible {
     case uploadObject(UploadObjectInput)
     case downloadObject(DownloadObjectInput)
     case uploadDirectory(UploadDirectoryInput)
     case downloadBucket(DownloadBucketInput)
 
     public init(from input: any TransferInput) {
-        if let uploadInput = input as? UploadObjectInput {
+        switch input {
+        case let uploadInput as UploadObjectInput:
             self = .uploadObject(uploadInput)
-        } else if let downloadInput = input as? DownloadObjectInput {
+        case let downloadInput as DownloadObjectInput:
             self = .downloadObject(downloadInput)
-        } else if let uploadDirInput = input as? UploadDirectoryInput {
+        case let uploadDirInput as UploadDirectoryInput:
             self = .uploadDirectory(uploadDirInput)
-        } else if let downloadBucketInput = input as? DownloadBucketInput {
+        case let downloadBucketInput as DownloadBucketInput:
             self = .downloadBucket(downloadBucketInput)
-        } else {
+        default:
             fatalError("Unexpected TransferInput type: \(type(of: input))")
+        }
+    }
+
+    // CustomStringConvertible conformance.
+    public var description: String {
+        switch self {
+        case .uploadObject: return "UploadObject"
+        case .downloadObject: return "DownloadObject"
+        case .uploadDirectory: return "UploadDirectory"
+        case .downloadBucket: return "DownloadBucket"
         }
     }
 }

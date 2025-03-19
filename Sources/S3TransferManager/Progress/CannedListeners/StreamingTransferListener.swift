@@ -32,32 +32,34 @@ public final class StreamingTransferListener: TransferListener {
 
     public func onTransferInitiated(input: any TransferInput, snapshot: any TransferProgressSnapshot) {
         let transferInputType = TransferInputType(from: input)
+        var transferEvent: TransferEvent
         switch transferInputType {
         case .uploadObject(let uploadObjectInput):
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            continuation.yield(TransferEvent.uploadObjectInitiated(
+            transferEvent = TransferEvent.uploadObjectInitiated(
                 input: uploadObjectInput,
                 snapshot: singleObjectSnapshot
-            ))
+            )
         case .downloadObject(let downloadObjectInput):
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            continuation.yield(TransferEvent.downloadObjectInitiated(
+            transferEvent = TransferEvent.downloadObjectInitiated(
                 input: downloadObjectInput,
                 snapshot: singleObjectSnapshot
-            ))
+            )
         case .uploadDirectory(let uploadDirectoryInput):
             let directorySnapshot = snapshot as! DirectoryTransferProgressSnapshot
-            continuation.yield(TransferEvent.uploadDirectoryInitiated(
+            transferEvent = TransferEvent.uploadDirectoryInitiated(
                 input: uploadDirectoryInput,
                 snapshot: directorySnapshot
-            ))
+            )
         case .downloadBucket(let downloadBucketInput):
             let directorySnapshot = snapshot as! DirectoryTransferProgressSnapshot
-            continuation.yield(TransferEvent.downloadBucketInitiated(
+            transferEvent = TransferEvent.downloadBucketInitiated(
                 input: downloadBucketInput,
                 snapshot: directorySnapshot
-            ))
+            )
         }
+        continuation.yield(transferEvent)
     }
 
     public func onBytesTransferred(input: any TransferInput, snapshot: any TransferProgressSnapshot) {
@@ -88,66 +90,70 @@ public final class StreamingTransferListener: TransferListener {
         snapshot: any TransferProgressSnapshot
     ) {
         let transferInputType = TransferInputType(from: input)
+        var transferEvent: TransferEvent
         switch transferInputType {
         case .uploadObject(let uploadObjectInput):
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            continuation.yield(TransferEvent.uploadObjectComplete(
+            transferEvent = TransferEvent.uploadObjectComplete(
                 input: uploadObjectInput,
                 output: output as! UploadObjectOutput,
                 snapshot: singleObjectSnapshot
-            ))
+            )
         case .downloadObject(let downloadObjectInput):
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            continuation.yield(TransferEvent.downloadObjectComplete(
+            transferEvent = TransferEvent.downloadObjectComplete(
                 input: downloadObjectInput,
                 output: output as! DownloadObjectOutput,
                 snapshot: singleObjectSnapshot
-            ))
+            )
         case .uploadDirectory(let uploadDirectoryInput):
             let directorySnapshot = snapshot as! DirectoryTransferProgressSnapshot
-            continuation.yield(TransferEvent.uploadDirectoryComplete(
+            transferEvent = TransferEvent.uploadDirectoryComplete(
                 input: uploadDirectoryInput,
                 output: output as! UploadDirectoryOutput,
                 snapshot: directorySnapshot
-            ))
+            )
         case .downloadBucket(let downloadBucketInput):
             let directorySnapshot = snapshot as! DirectoryTransferProgressSnapshot
-            continuation.yield(TransferEvent.downloadBucketComplete(
+            transferEvent = TransferEvent.downloadBucketComplete(
                 input: downloadBucketInput,
                 output: output as! DownloadBucketOutput,
                 snapshot: directorySnapshot
-            ))
+            )
         }
+        continuation.yield(transferEvent)
     }
 
     public func onTransferFailed(input: any TransferInput, snapshot: any TransferProgressSnapshot) {
         let transferInputType = TransferInputType(from: input)
+        var transferEvent: TransferEvent
         switch transferInputType {
         case .uploadObject(let uploadObjectInput):
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            continuation.yield(TransferEvent.uploadObjectFailed(
+            transferEvent = TransferEvent.uploadObjectFailed(
                 input: uploadObjectInput,
                 snapshot: singleObjectSnapshot
-            ))
+            )
         case .downloadObject(let downloadObjectInput):
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            continuation.yield(TransferEvent.downloadObjectFailed(
+            transferEvent = TransferEvent.downloadObjectFailed(
                 input: downloadObjectInput,
                 snapshot: singleObjectSnapshot
-            ))
+            )
         case .uploadDirectory(let uploadDirectoryInput):
             let directorySnapshot = snapshot as! DirectoryTransferProgressSnapshot
-            continuation.yield(TransferEvent.uploadDirectoryFailed(
+            transferEvent = TransferEvent.uploadDirectoryFailed(
                 input: uploadDirectoryInput,
                 snapshot: directorySnapshot
-            ))
+            )
         case .downloadBucket(let downloadBucketInput):
             let directorySnapshot = snapshot as! DirectoryTransferProgressSnapshot
-            continuation.yield(TransferEvent.downloadBucketFailed(
+            transferEvent = TransferEvent.downloadBucketFailed(
                 input: downloadBucketInput,
                 snapshot: directorySnapshot
-            ))
+            )
         }
+        continuation.yield(transferEvent)
     }
 }
 
