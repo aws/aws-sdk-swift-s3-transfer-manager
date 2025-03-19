@@ -153,7 +153,7 @@ public struct UploadObjectInput: TransferInput {
     private func resolveChecksumAlgorithmForCreateMPUInput(
         _ putObjectInput: PutObjectInput
     ) -> S3ClientTypes.ChecksumAlgorithm {
-        // If algorithm was configurd on the `PutObjectInput`, just return that.
+        // If algorithm was configured on the `PutObjectInput`, just return that.
         if let algo = putObjectInput.checksumAlgorithm {
             return algo
         }
