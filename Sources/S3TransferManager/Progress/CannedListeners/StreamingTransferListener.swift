@@ -77,9 +77,7 @@ public final class StreamingTransferListener: TransferListener {
                 input: downloadObjectInput,
                 snapshot: singleObjectSnapshot
             ))
-        case .uploadDirectory:
-            return // Intentionally no-op. `uploadObject` handles lower-level byte transfer events above.
-        case .downloadBucket:
+        case .uploadDirectory, .downloadBucket:
             return // Intentionally no-op. `downloadObject` handles lower-level byte transfer events above.
         }
     }

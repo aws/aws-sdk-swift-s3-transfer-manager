@@ -52,9 +52,7 @@ public struct LoggingTransferListener: TransferListener {
         case .downloadObject:
             let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
             message = "Downloaded more bytes. Running total: \(singleObjectSnapshot.transferredBytes)"
-        case .uploadDirectory:
-            return // Intentionally no-op. `uploadObject` handles lower-level byte transfer logs above.
-        case .downloadBucket:
+        case .uploadDirectory, .downloadBucket:
             return // Intentionally no-op. `downloadObject` handles lower-level byte transfer logs above.
         }
         logS3TMOperation(input: input, message: message)

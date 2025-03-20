@@ -20,13 +20,13 @@ public typealias FailurePolicy = @Sendable (
 
 /// The enum namespace for two canned failure policy closures `rethrowExceptionToTerminateRequest` and `ignoreFailureAndContinueTransfer`.
 public enum CannedFailurePolicy {
-    /// A canned failure policy that just re-throws the error from the failed single object transfer and terminates the directory transfer operation.
+    /// The default failure policy that just re-throws the error from the failed single object transfer and terminates the directory transfer operation.
     public static let rethrowExceptionToTerminateRequest: FailurePolicy = {
         (failedSingleObjectTransferError: Error, directoryTransferInput: TransferInput) in
         throw failedSingleObjectTransferError // Just rethrow the error.
     }
 
-    /// A canned failure policy that ignores the error from the failed single object transfer.
+    /// A failure policy that ignores the error from the failed single object transfer.
     public static let ignoreFailureAndContinueTransfer: FailurePolicy = {
         (failedSingleObjectTransferError: Error, directoryTransferInput: TransferInput) in
         return // No-op; just return.
