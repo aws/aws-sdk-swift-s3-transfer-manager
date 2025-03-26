@@ -281,6 +281,39 @@ public extension S3TransferManager {
         // Create the file at the specified location
         fileManager.createFile(atPath: url.path, contents: nil)
     }
+
+    // TransferListener helper functions for `downloadBucket`.
+
+    private func onTransferInitiated(
+        _ listeners: [TransferListener],
+        _ input: DownloadBucketInput,
+        _ snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadBucketTransferInitiated(input: input, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferComplete(
+        _ listeners: [TransferListener],
+        _ input: DownloadBucketInput,
+        _ output: DownloadBucketOutput,
+        _ snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadBucketTransferComplete(input: input, output: output, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferFailed(
+        _ listeners: [TransferListener],
+        _ input: DownloadBucketInput,
+        _ snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadBucketTransferFailed(input: input, snapshot: snapshot)
+        }
+    }
 }
 
 /// A non-exhaustive list of errors that can be thrown by the `downloadBucket` operation of `S3TransferManager`.

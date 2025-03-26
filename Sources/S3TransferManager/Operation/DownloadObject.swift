@@ -527,6 +527,49 @@ public extension S3TransferManager {
         }
         return size
     }
+
+    // TransferListener helper functions for `downloadObject`.
+
+    private func onTransferInitiated(
+        _ listeners: [TransferListener],
+        _ input: DownloadObjectInput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadObjectTransferInitiated(input: input, snapshot: snapshot)
+        }
+    }
+
+    private func onBytesTransferred(
+        _ listeners: [TransferListener],
+        _ input: DownloadObjectInput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadObjectBytesTransferred(input: input, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferComplete(
+        _ listeners: [TransferListener],
+        _ input: DownloadObjectInput,
+        _ output: DownloadObjectOutput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadObjectTransferComplete(input: input, output: output, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferFailed(
+        _ listeners: [TransferListener],
+        _ input: DownloadObjectInput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onDownloadObjectTransferFailed(input: input, snapshot: snapshot)
+        }
+    }
 }
 
 /// A non-exhaustive list of errors that can be thrown by the `downloadObject` operation of `S3TransferManager`.

@@ -272,6 +272,39 @@ public extension S3TransferManager {
         // Step 5: prefix the string from Step 4 with the resolved prefix.
         return resolvedPrefix + relativePath
     }
+
+    // TransferListener helper functions for `uploadDirectory`.
+
+    private func onTransferInitiated(
+        _ listeners: [TransferListener],
+        _ input: UploadDirectoryInput,
+        _ snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onUploadDirectoryTransferInitiated(input: input, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferComplete(
+        _ listeners: [TransferListener],
+        _ input: UploadDirectoryInput,
+        _ output: UploadDirectoryOutput,
+        _ snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onUploadDirectoryTransferComplete(input: input, output: output, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferFailed(
+        _ listeners: [TransferListener],
+        _ input: UploadDirectoryInput,
+        _ snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onUploadDirectoryTransferFailed(input: input, snapshot: snapshot)
+        }
+    }
 }
 
 /// A non-exhaustive list of errors that can be thrown by the `uploadDirectory` operation of `S3TransferManager`.

@@ -18,72 +18,148 @@ public struct LoggingTransferListener: TransferListener {
     /// Initializes `LoggingTransferListener`.
     public init() {}
 
-    public func onTransferInitiated(input: any TransferInput, snapshot: any TransferProgressSnapshot) {
-        let transferInputType = TransferInputType(from: input)
-        let messagePrefix = "Transfer started."
-        var message: String = ""
-        switch transferInputType {
-        case .uploadObject(let uploadObjectInput):
-            let objectKey = uploadObjectInput.putObjectInput.key!
-            let bucket = uploadObjectInput.putObjectInput.bucket!
-            message = "\(messagePrefix) Resolved object key: \"\(objectKey)\". Destination bucket: \"\(bucket)\"."
-        case .downloadObject(let downloadObjectInput):
-            let objectKey = downloadObjectInput.getObjectInput.key!
-            let bucket = downloadObjectInput.getObjectInput.bucket!
-            message = "\(messagePrefix) Object key: \"\(objectKey)\". Source bucket: \"\(bucket)\"."
-        case .uploadDirectory(let uploadDirectoryInput):
-            let source = uploadDirectoryInput.source.path
-            let bucket = uploadDirectoryInput.bucket
-            message = "\(messagePrefix) Source directory path: \"\(source)\". Destination bucket: \"\(bucket)\"."
-        case .downloadBucket(let downloadBucketInput):
-            let bucket = downloadBucketInput.bucket
-            let destination = downloadBucketInput.destination.path
-            message = "\(messagePrefix) Source bucket: \"\(bucket)\". Destination directory path: \"\(destination)\"."
-        }
-        logS3TMOperation(input: input, message: message)
-    }
-
-    public func onBytesTransferred(input: any TransferInput, snapshot: any TransferProgressSnapshot) {
-        let transferInputType = TransferInputType(from: input)
-        var message: String = ""
-        switch transferInputType {
-        case .uploadObject:
-            message = getProgressBarString(snapshot: snapshot)
-        case .downloadObject:
-            let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
-            message = "Downloaded more bytes. Running total: \(singleObjectSnapshot.transferredBytes)"
-        case .uploadDirectory, .downloadBucket:
-            return // Intentionally no-op. `downloadObject` handles lower-level byte transfer logs above.
-        }
-        logS3TMOperation(input: input, message: message)
-    }
-
-    public func onTransferComplete(
-        input: any TransferInput,
-        output: any TransferOutput,
-        snapshot: any TransferProgressSnapshot
+    // Helper function that logs provided message with operation name & operation ID prefix.
+    private func log(
+        _ operation: String,
+        _ operationID: String,
+        _ message: String
     ) {
-        let messagePrefix = "Transfer completed successfully."
-        var message: String = "onTransferComplete message"
-        switch snapshot {
-        case let snapshot as SingleObjectTransferProgressSnapshot:
-            message = "\(messagePrefix) Total number of transferred bytes: \(snapshot.transferredBytes)"
-        case let snapshot as DirectoryTransferProgressSnapshot:
-            message = "\(messagePrefix) Total number of transferred files: \(snapshot.transferredFiles)"
-        default:
-            () // Unreachable case; added to quiet compiler.
-        }
-        logS3TMOperation(input: input, message: message)
+        logger.info("[\(operation) ID: \(operationID)] \(message)")
     }
 
-    public func onTransferFailed(input: any TransferInput, snapshot: any TransferProgressSnapshot) {
-        let message: String = "Transfer failed."
-        logS3TMOperation(input: input, message: message)
+    // MARK: - `uploadObject`.
+
+    public func onUploadObjectTransferInitiated(
+        input: UploadObjectInput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        let message = "Transfer started. "
+        + "Resolved object key: \"\(input.putObjectInput.key!)\". "
+        + "Destination bucket: \"\(input.putObjectInput.bucket!)\"."
+        log("UploadObject", input.operationID, message)
+    }
+
+    public func onUploadObjectBytesTransferred(
+        input: UploadObjectInput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        let message = getProgressBarString(singleObjectSnapshot: snapshot)
+        log("UploadObject", input.operationID, message)
+    }
+
+    public func onUploadObjectTransferComplete(
+        input: UploadObjectInput,
+        output: UploadObjectOutput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        let message = "Transfer completed successfully. "
+        + "Total number of transferred bytes: \(snapshot.transferredBytes)"
+        log("UploadObject", input.operationID, message)
+    }
+
+    public func onUploadObjectTransferFailed(
+        input: UploadObjectInput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        log("UploadObject", input.operationID, "Transfer failed.")
+    }
+
+    // MARK: - `downloadObject`.
+
+    public func onDownloadObjectTransferInitiated(
+        input: DownloadObjectInput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        let message = "Transfer started. "
+        + "Object key: \"\(input.getObjectInput.key!)\". "
+        + "Source bucket: \"\(input.getObjectInput.bucket!)\"."
+        log("DownloadObject", input.operationID, message)
+    }
+
+    public func onDownloadObjectBytesTransferred(
+        input: DownloadObjectInput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        let message = "Downloaded more bytes. Running total: \(snapshot.transferredBytes)"
+        log("DownloadObject", input.operationID, message)
+    }
+
+    public func onDownloadObjectTransferComplete(
+        input: DownloadObjectInput,
+        output: DownloadObjectOutput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        let message = "Transfer completed successfully. "
+        + "Total number of transferred bytes: \(snapshot.transferredBytes)"
+        log("DownloadObject", input.operationID, message)
+    }
+
+    public func onDownloadObjectTransferFailed(
+        input: DownloadObjectInput,
+        snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        log("DownloadObject", input.operationID, "Transfer failed.")
+    }
+
+    // MARK: - `uploadDirectory`.
+
+    public func onUploadDirectoryTransferInitiated(
+        input: UploadDirectoryInput,
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        let message = "Transfer started. "
+        + "Source directory: \"\(input.source.path)\". "
+        + "Destination bucket: \"\(input.bucket)\"."
+        log("UploadDirectory", input.operationID, message)
+    }
+
+    public func onUploadDirectoryTransferComplete(
+        input: UploadDirectoryInput,
+        output: UploadDirectoryOutput,
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        let message = "Transfer completed successfully. "
+        + "Total number of transferred files: \(snapshot.transferredFiles)"
+        log("UploadDirectory", input.operationID, message)
+    }
+
+    public func onUploadDirectoryTransferFailed(
+        input: UploadDirectoryInput,
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        log("UploadDirectory", input.operationID, "Transfer failed.")
+    }
+
+    // MARK: - `downloadBucket`
+
+    public func onDownloadBucketTransferInitiated(
+        input: DownloadBucketInput,
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        let message = "Transfer started. "
+        + "Source bucket: \"\(input.bucket)\". "
+        + "Destination directory: \"\(input.destination.path)\"."
+        log("DownloadBucket", input.operationID, message)
+    }
+
+    public func onDownloadBucketTransferComplete(
+        input: DownloadBucketInput,
+        output: DownloadBucketOutput,
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        let message = "Transfer completed successfully. "
+        + "Total number of transferred files: \(snapshot.transferredFiles)"
+        log("DownloadBucket", input.operationID, message)
+    }
+
+    public func onDownloadBucketTransferFailed(
+        input: DownloadBucketInput,
+        snapshot: DirectoryTransferProgressSnapshot) {
+        log("DownloadBucket", input.operationID, "Transfer failed.")
     }
 
     // Helper function that constructs progress bar string.
-    private func getProgressBarString(snapshot: TransferProgressSnapshot) -> String {
-        let singleObjectSnapshot = snapshot as! SingleObjectTransferProgressSnapshot
+    private func getProgressBarString(singleObjectSnapshot: SingleObjectTransferProgressSnapshot) -> String {
         // Example progress bar string: |==========          | 50.0%
         let barWidth = 20
         let totalBytes = Double(singleObjectSnapshot.totalBytes!)
@@ -98,11 +174,5 @@ public struct LoggingTransferListener: TransferListener {
         let emptySection = String(repeating: " ", count: emptyCount)
         let percentage = String(format: "%.1f", ratio * 100)
         return "|\(filledSection)\(emptySection)| \(percentage)%"
-    }
-
-    // Helper function that logs provided message with operation name & operation ID prefix.
-    private func logS3TMOperation(input: any TransferInput, message: String) {
-        let transferInputType = TransferInputType(from: input)
-        logger.info("[\(transferInputType) ID: \(input.operationID)] \(message)")
     }
 }
