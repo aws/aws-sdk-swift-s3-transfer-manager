@@ -23,6 +23,7 @@ public final class StreamingTransferListener: TransferListener {
     /// The async stream that can be asynchronously iterated on to retrieve the published events from `downloadBucket`.
     public let downloadBucketEventStream: AsyncThrowingStream<DownloadBucketTransferEvent, Error>
 
+    // swiftlint:disable line_length
     // The continuations used internally to send events to the streams.
     private let uploadObjectEventStreamContinuation: AsyncThrowingStream<UploadObjectTransferEvent, Error>.Continuation
     private let downloadObjectEventStreamContinuation: AsyncThrowingStream<DownloadObjectTransferEvent, Error>.Continuation
@@ -36,6 +37,7 @@ public final class StreamingTransferListener: TransferListener {
         (self.uploadDirectoryEventStream, self.uploadDirectoryEventStreamContinuation) = AsyncThrowingStream.makeStream()
         (self.downloadBucketEventStream, self.downloadBucketEventStreamContinuation) = AsyncThrowingStream.makeStream()
     }
+    // swiftlint:enable line_length
 
     /// Closes the streams used by the `StreamingTransferListener` instance.
     public func closeStreams() {
