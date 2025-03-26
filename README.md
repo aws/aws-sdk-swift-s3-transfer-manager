@@ -245,22 +245,20 @@ let s3tm = try await S3TransferManager()
 // Create the StreamingTransferListener.
 let streamingTransferListener = StreamingTransferListener()
 
-// Start up the background Task that consumes events from the stream.
+// Start up the background Task that consumes uploadObject events from the corresponding stream.
 Task {
-    for try await event in streamingTransferListener.stream {
-        switch event {
+    for try await uploadObjectTransferEvent in streamingTransferListener.uploadObjectEventStream {
+        switch uploadObjectTransferEvent {
         case .uploadObjectInitiated(let input, let snapshot):
             print("UploadObject operation initiated. ID: \(input.operationID)")
         case .uploadObjectBytesTransferred(let input, let snapshot):
             print("Transferred more bytes. Running total: \(snapshot.transferredBytes)")
         case .uploadObjectComplete(let input, let output, let snapshot):
             print("Successfully finished UploadObject. ID: \(input.operationID)")
-            streamingTransferListener.closeStream() // Close stream explicitly if it won't be used anymore.
+            streamingTransferListener.closeStreams() // Close stream explicitly if it won't be used anymore.
         case .uploadObjectFailed(let input, let snapshot):
             print("UploadObject failed. ID: \(input.operationID)")
-            streamingTransferListener.closeStream() // Close stream explicitly if it won't be used anymore.
-        default:
-            break
+            streamingTransferListener.closeStreams() // Close stream explicitly if it won't be used anymore.
         }
     }
 }
