@@ -221,13 +221,14 @@ public final class StreamingTransferListener: TransferListener {
 
     public func onDownloadBucketTransferFailed(
         input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot) {
-            downloadBucketEventStreamContinuation.yield(
-                DownloadBucketTransferEvent.downloadBucketFailed(
-                    input: input,
-                    snapshot: snapshot
-                )
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
+        downloadBucketEventStreamContinuation.yield(
+            DownloadBucketTransferEvent.downloadBucketFailed(
+                input: input,
+                snapshot: snapshot
             )
+        )
     }
 }
 

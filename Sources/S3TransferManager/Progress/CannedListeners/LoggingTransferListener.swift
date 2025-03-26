@@ -154,7 +154,8 @@ public struct LoggingTransferListener: TransferListener {
 
     public func onDownloadBucketTransferFailed(
         input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot) {
+        snapshot: DirectoryTransferProgressSnapshot
+    ) {
         log("DownloadBucket", input.operationID, "Transfer failed.")
     }
 
