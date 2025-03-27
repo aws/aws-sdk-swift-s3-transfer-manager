@@ -232,7 +232,7 @@ public extension S3TransferManager {
                 checksumMode: config.checksumValidationEnabled ? .enabled : .sdkUnknown("DISABLED"),
                 key: pair.key
             ),
-            transferListeners: input.transferListeners
+            transferListeners: input.objectTransferListeners
         )
         do {
             // Create S3TM `downloadObject` task and await its completion before returning.
@@ -285,33 +285,33 @@ public extension S3TransferManager {
     // TransferListener helper functions for `downloadBucket`.
 
     private func onTransferInitiated(
-        _ listeners: [TransferListener],
+        _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onDownloadBucketTransferInitiated(input: input, snapshot: snapshot)
+            listener.onTransferInitiated(input: input, snapshot: snapshot)
         }
     }
 
     private func onTransferComplete(
-        _ listeners: [TransferListener],
+        _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
         _ output: DownloadBucketOutput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onDownloadBucketTransferComplete(input: input, output: output, snapshot: snapshot)
+            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
         }
     }
 
     private func onTransferFailed(
-        _ listeners: [TransferListener],
+        _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onDownloadBucketTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot)
         }
     }
 }

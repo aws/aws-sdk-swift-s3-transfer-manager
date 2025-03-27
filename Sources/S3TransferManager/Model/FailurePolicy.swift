@@ -13,22 +13,23 @@
 /// These concrete error types contain the original error thrown from the failed single object transfer & the single object transfer input used with the failed operation. I.e., you could provide a custom failure policy that retries the failed single object transfer by retrieving and re-using the `UploadObjectInput` / `DownloadObjectInput` nested within them.
 ///
 /// The closure also takes in a `TransferInput` instance which is the original directory transfer input that was passed to the directory transfer operation (i.e., either `UploadDirectoryInput` or `DownloadBucketInput`).
-public typealias FailurePolicy = @Sendable (
-    Error,
-    TransferInput
-) async throws -> Void
+public typealias FailurePolicy<Input> = @Sendable (Error, Input) async throws -> Void
 
 /// The enum namespace for two canned failure policy closures `rethrowExceptionToTerminateRequest` and `ignoreFailureAndContinueTransfer`.
 public enum CannedFailurePolicy {
     /// The default failure policy that just re-throws the error from the failed single object transfer and terminates the directory transfer operation.
-    public static let rethrowExceptionToTerminateRequest: FailurePolicy = {
-        (failedSingleObjectTransferError: Error, directoryTransferInput: TransferInput) in
-        throw failedSingleObjectTransferError // Just rethrow the error.
+    public static func rethrowExceptionToTerminateRequest<Input>() -> FailurePolicy<Input> {
+        return {
+            (failedSingleObjectTransferError: Error, directoryTransferInput: Input) in
+            throw failedSingleObjectTransferError // Just rethrow the error.
+        }
     }
 
     /// A failure policy that ignores the error from the failed single object transfer.
-    public static let ignoreFailureAndContinueTransfer: FailurePolicy = {
-        (failedSingleObjectTransferError: Error, directoryTransferInput: TransferInput) in
-        return // No-op; just return.
+    public static func ignoreFailureAndContinueTransfer<Input>() -> FailurePolicy<Input> {
+        return {
+            (failedSingleObjectTransferError: Error, directoryTransferInput: Input) in
+            return // No-op; just return.
+        }
     }
 }

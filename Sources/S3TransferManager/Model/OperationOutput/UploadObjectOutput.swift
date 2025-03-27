@@ -10,7 +10,7 @@ import AWSS3
 /// The synthetic output type for the `uploadObject` operation of `S3TransferManager`.
 ///
 /// This type contains the intersection of output members in `PutObjectOutput` and `CompleteMultipartUploadOutput`.
-public struct UploadObjectOutput: TransferOutput {
+public struct UploadObjectOutput {
     /// Indicates whether the multipart upload uses an S3 Bucket Key for server-side encryption with Key Management Service (KMS) keys (SSE-KMS).
     public let bucketKeyEnabled: Swift.Bool?
     /// The base64-encoded, 32-bit CRC-32 checksum of the object. This will only be present if it was uploaded with the object. When you use an API operation on an object that was uploaded using multipart uploads, this value may not be a direct checksum value of the full object. Instead, it's a calculation based on the checksum values of each individual part. For more information about how checksums are calculated with multipart uploads, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html#large-object-checksums) in the Amazon S3 User Guide.

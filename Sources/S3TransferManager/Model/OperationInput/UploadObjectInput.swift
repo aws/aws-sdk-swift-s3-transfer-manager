@@ -10,13 +10,13 @@ import enum Smithy.ByteStream
 import struct Foundation.UUID
 
 /// The synthetic input type for the `uploadObject` operation of `S3TransferManager`.
-public struct UploadObjectInput: TransferInput {
+public struct UploadObjectInput {
     /// The unique ID for the operation; can be used to log or identify a specific request.
     public let operationID: String
     /// The input struct for the object you want to upload.
     public let putObjectInput: PutObjectInput
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
-    public let transferListeners: [TransferListener]
+    public let transferListeners: [UploadObjectTransferListener]
 
     /// Initializes `UploadObjectInput` with provided parameters.
     ///
@@ -25,7 +25,7 @@ public struct UploadObjectInput: TransferInput {
     ///   - transferListeners: An array of `TransferListener`. The transfer status and progress of the operation will be published to each transfer listener provided here via hooks. Default value is an empty array.
     public init(
         putObjectInput: PutObjectInput,
-        transferListeners: [TransferListener] = []
+        transferListeners: [UploadObjectTransferListener] = []
     ) {
         self.operationID = UUID().uuidString
         self.putObjectInput = putObjectInput
@@ -37,7 +37,7 @@ public struct UploadObjectInput: TransferInput {
     internal init(
         operationID: String,
         putObjectInput: PutObjectInput,
-        transferListeners: [TransferListener] = []
+        transferListeners: [UploadObjectTransferListener] = []
     ) {
         self.operationID = operationID
         self.putObjectInput = putObjectInput

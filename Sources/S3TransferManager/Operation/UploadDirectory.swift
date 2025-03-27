@@ -230,7 +230,7 @@ public extension S3TransferManager {
                 checksumAlgorithm: config.checksumAlgorithm,
                 key: resolvedObjectKey
             )),
-            transferListeners: input.transferListeners
+            transferListeners: input.objectTransferListeners
         )
 
         do {
@@ -276,33 +276,33 @@ public extension S3TransferManager {
     // TransferListener helper functions for `uploadDirectory`.
 
     private func onTransferInitiated(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadDirectoryTransferInitiated(input: input, snapshot: snapshot)
+            listener.onTransferInitiated(input: input, snapshot: snapshot)
         }
     }
 
     private func onTransferComplete(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
         _ output: UploadDirectoryOutput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadDirectoryTransferComplete(input: input, output: output, snapshot: snapshot)
+            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
         }
     }
 
     private func onTransferFailed(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadDirectoryTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot)
         }
     }
 }

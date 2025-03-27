@@ -10,7 +10,7 @@ import struct Foundation.URL
 import struct Foundation.UUID
 
 /// The synthetic input type for the `uploadDirectory` operation of `S3TransferManager`.
-public struct UploadDirectoryInput: TransferInput {
+public struct UploadDirectoryInput {
     /// The unique ID for the operation; can be used to log or identify a specific request.
     public let operationID: String = UUID().uuidString
     /// The destination S3 bucket.
@@ -28,9 +28,11 @@ public struct UploadDirectoryInput: TransferInput {
     /// The closure that allows customizing each individual `PutObjectinput` used behind the scenes for each `uploadObject` transfer operation.
     public let putObjectRequestCallback: @Sendable (PutObjectInput) -> PutObjectInput
     /// The closure that handles each `uploadObject` transfer failure.
-    public let failurePolicy: FailurePolicy
+    public let failurePolicy: FailurePolicy<UploadDirectoryInput>
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
-    public let transferListeners: [TransferListener]
+    public let transferListeners: [UploadDirectoryTransferListener]
+    /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
+    public let objectTransferListeners: [UploadObjectTransferListener]
 
     /// Initializes `UploadDirectoryInput` with provided parameters.
     ///
@@ -54,8 +56,9 @@ public struct UploadDirectoryInput: TransferInput {
         putObjectRequestCallback: @Sendable @escaping (PutObjectInput) -> PutObjectInput = { input in
             return input
         },
-        failurePolicy: @escaping FailurePolicy = CannedFailurePolicy.rethrowExceptionToTerminateRequest,
-        transferListeners: [TransferListener] = []
+        failurePolicy: @escaping FailurePolicy<UploadDirectoryInput> = CannedFailurePolicy.rethrowExceptionToTerminateRequest(),
+        transferListeners: [UploadDirectoryTransferListener] = [],
+        objectTransferListeners: [UploadObjectTransferListener] = []
     ) throws {
         self.bucket = bucket
         self.source = source
@@ -66,6 +69,7 @@ public struct UploadDirectoryInput: TransferInput {
         self.putObjectRequestCallback = putObjectRequestCallback
         self.failurePolicy = failurePolicy
         self.transferListeners = transferListeners
+        self.objectTransferListeners = objectTransferListeners
         try validateSourceURL(source)
     }
 

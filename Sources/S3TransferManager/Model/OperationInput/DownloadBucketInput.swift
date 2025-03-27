@@ -10,7 +10,7 @@ import struct Foundation.URL
 import struct Foundation.UUID
 
 /// The synthetic input type for the `downloadBucket` operation of `S3TransferManager`.
-public struct DownloadBucketInput: TransferInput {
+public struct DownloadBucketInput {
     /// The unique ID for the operation; can be used to log or identify a specific request.
     public let operationID: String = UUID().uuidString
     /// The source S3 bucket.
@@ -26,9 +26,11 @@ public struct DownloadBucketInput: TransferInput {
     /// The closure that allows customizing each individual `GetObjectInput` used behind the scenes for each `downloadObject` transfer operation.
     public let getObjectRequestCallback: @Sendable (GetObjectInput) -> GetObjectInput
     /// The closure that handles each `downloadObject` transfer failure.
-    public let failurePolicy: FailurePolicy
+    public let failurePolicy: FailurePolicy<DownloadBucketInput>
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
-    public let transferListeners: [TransferListener]
+    public let transferListeners: [DownloadBucketTransferListener]
+    /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
+    public let objectTransferListeners: [DownloadObjectTransferListener]
 
     /// Initializes `DownloadBucketInput` with provided parameters.
     ///
@@ -50,8 +52,9 @@ public struct DownloadBucketInput: TransferInput {
         getObjectRequestCallback: @Sendable @escaping (GetObjectInput) -> GetObjectInput = { input in
             return input
         },
-        failurePolicy: @escaping FailurePolicy = CannedFailurePolicy.rethrowExceptionToTerminateRequest,
-        transferListeners: [TransferListener] = []
+        failurePolicy: @escaping FailurePolicy<DownloadBucketInput> = CannedFailurePolicy.rethrowExceptionToTerminateRequest(),
+        transferListeners: [DownloadBucketTransferListener] = [],
+        objectTransferListeners: [DownloadObjectTransferListener] = []
     ) {
         self.bucket = bucket
         self.destination = destination
@@ -61,5 +64,6 @@ public struct DownloadBucketInput: TransferInput {
         self.getObjectRequestCallback = getObjectRequestCallback
         self.failurePolicy = failurePolicy
         self.transferListeners = transferListeners
+        self.objectTransferListeners = objectTransferListeners
     }
 }

@@ -10,185 +10,156 @@
 /// The transfer operations of `S3TransferManager` are "instrumented" with these transfer listener hooks.
 ///
 /// Users can implement custom transfer listeners and provide it via the `transferListeners` property of the corresponding operation input struct.
-public protocol TransferListener: Sendable {
+public protocol UploadObjectTransferListener: Sendable {
     // UploadObject hooks.
 
     /// This method is invoked exactly once per transfer, right after the operation has started.
-    func onUploadObjectTransferInitiated(
+    func onTransferInitiated(
         input: UploadObjectInput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
 
     /// This method is invoked when some number of bytes are submitted or received. It is called at least once for a successful transfer.
-    func onUploadObjectBytesTransferred(
+    func onBytesTransferred(
         input: UploadObjectInput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has completed successfully. It is called exactly once for a successful transfer.
-    func onUploadObjectTransferComplete(
+    func onTransferComplete(
         input: UploadObjectInput,
         output: UploadObjectOutput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
-    func onUploadObjectTransferFailed(
+    func onTransferFailed(
         input: UploadObjectInput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
+}
 
-    // DownloadObject hooks.
+public extension UploadObjectTransferListener {
+    static var logger: UploadObjectTransferListener {
+        UploadObjectLoggingTransferListener()
+    }
+
+    static var asyncStreaming: UploadObjectTransferListener {
+        UploadObjectStreamingTransferListener()
+    }
+
+    var operation: String { "UploadObject" }
+}
+
+public protocol DownloadObjectTransferListener: Sendable {
 
     /// This method is invoked exactly once per transfer, right after the operation has started.
-    func onDownloadObjectTransferInitiated(
+    func onTransferInitiated(
         input: DownloadObjectInput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
 
     /// This method is invoked when some number of bytes are submitted or received. It is called at least once for a successful transfer.
-    func onDownloadObjectBytesTransferred(
+    func onBytesTransferred(
         input: DownloadObjectInput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has completed successfully. It is called exactly once for a successful transfer.
-    func onDownloadObjectTransferComplete(
+    func onTransferComplete(
         input: DownloadObjectInput,
         output: DownloadObjectOutput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
-    func onDownloadObjectTransferFailed(
+    func onTransferFailed(
         input: DownloadObjectInput,
         snapshot: SingleObjectTransferProgressSnapshot
     )
+}
 
-    // UploadDirectory hooks.
+public extension DownloadObjectTransferListener {
+
+    static var logger: DownloadObjectTransferListener {
+        DownloadObjectLoggingTransferListener()
+    }
+
+    static var asyncStreaming: DownloadObjectTransferListener {
+        DownloadObjectStreamingTransferListener()
+    }
+
+    var operation: String { "DownloadObject" }
+}
+
+public protocol UploadDirectoryTransferListener: Sendable {
 
     /// This method is invoked exactly once per transfer, right after the operation has started.
-    func onUploadDirectoryTransferInitiated(
+    func onTransferInitiated(
         input: UploadDirectoryInput,
         snapshot: DirectoryTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has completed successfully. It is called exactly once for a successful transfer.
-    func onUploadDirectoryTransferComplete(
+    func onTransferComplete(
         input: UploadDirectoryInput,
         output: UploadDirectoryOutput,
         snapshot: DirectoryTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
-    func onUploadDirectoryTransferFailed(
+    func onTransferFailed(
         input: UploadDirectoryInput,
         snapshot: DirectoryTransferProgressSnapshot
     )
+}
+
+public extension UploadDirectoryTransferListener {
+
+    static var logger: UploadDirectoryTransferListener {
+        UploadDirectoryLoggingTransferListener()
+    }
+
+    static var asyncStreaming: UploadDirectoryTransferListener {
+        UploadDirectoryStreamingTransferListener()
+    }
+
+    var operation: String { "UploadDirectory" }
+}
+
+public protocol DownloadBucketTransferListener: Sendable {
 
     // DownloadBucket hooks.
 
     /// This method is invoked exactly once per transfer, right after the operation has started.
-    func onDownloadBucketTransferInitiated(
+    func onTransferInitiated(
         input: DownloadBucketInput,
         snapshot: DirectoryTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has completed successfully. It is called exactly once for a successful transfer.
-    func onDownloadBucketTransferComplete(
+    func onTransferComplete(
         input: DownloadBucketInput,
         output: DownloadBucketOutput,
         snapshot: DirectoryTransferProgressSnapshot
     )
 
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
-    func onDownloadBucketTransferFailed(
+    func onTransferFailed(
         input: DownloadBucketInput,
         snapshot: DirectoryTransferProgressSnapshot
     )
 }
 
-// Default no-op implementations.
-extension TransferListener {
-    // UploadObject hooks.
+public extension DownloadBucketTransferListener {
 
-    func onUploadObjectTransferInitiated(
-        input: UploadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
+    static var logger: DownloadBucketTransferListener {
+        DownloadBucketLoggingTransferListener()
+    }
 
-    func onUploadObjectBytesTransferred(
-        input: UploadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
+    static var asyncStreaming: DownloadBucketTransferListener {
+        DownloadBucketStreamingTransferListener()
+    }
 
-    func onUploadObjectTransferComplete(
-        input: UploadObjectInput,
-        output: UploadObjectOutput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
-
-    func onUploadObjectTransferFailed(
-        input: UploadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
-
-    // DownloadObject hooks.
-
-    func onDownloadObjectTransferInitiated(
-        input: DownloadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
-
-    func onDownloadObjectBytesTransferred(
-        input: DownloadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
-
-    func onDownloadObjectTransferComplete(
-        input: DownloadObjectInput,
-        output: DownloadObjectOutput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
-
-    func onDownloadObjectTransferFailed(
-        input: DownloadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
-    ) {}
-
-    // UploadDirectory hooks.
-
-    func onUploadDirectoryTransferInitiated(
-        input: UploadDirectoryInput,
-        snapshot: DirectoryTransferProgressSnapshot
-    ) {}
-
-    func onUploadDirectoryTransferComplete(
-        input: UploadDirectoryInput,
-        output: UploadDirectoryOutput,
-        snapshot: DirectoryTransferProgressSnapshot
-    ) {}
-
-    func onUploadDirectoryTransferFailed(
-        input: UploadDirectoryInput,
-        snapshot: DirectoryTransferProgressSnapshot
-    ) {}
-
-    // DownloadBucket hooks.
-
-    func onDownloadBucketTransferInitiated(
-        input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot
-    ) {}
-
-    func onDownloadBucketTransferComplete(
-        input: DownloadBucketInput,
-        output: DownloadBucketOutput,
-        snapshot: DirectoryTransferProgressSnapshot
-    ) {}
-
-    func onDownloadBucketTransferFailed(
-        input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot
-    ) {}
+    var operation: String { "DownloadBucket" }
 }

@@ -371,43 +371,43 @@ public extension S3TransferManager {
     // TransferListener helper functions for `uploadObject`.
 
     private func onTransferInitiated(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadObjectTransferListener],
         _ input: UploadObjectInput,
         _ snapshot: SingleObjectTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadObjectTransferInitiated(input: input, snapshot: snapshot)
+            listener.onTransferInitiated(input: input, snapshot: snapshot)
         }
     }
 
     private func onBytesTransferred(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadObjectTransferListener],
         _ input: UploadObjectInput,
         _ snapshot: SingleObjectTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadObjectBytesTransferred(input: input, snapshot: snapshot)
+            listener.onBytesTransferred(input: input, snapshot: snapshot)
         }
     }
 
     private func onTransferComplete(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadObjectTransferListener],
         _ input: UploadObjectInput,
         _ output: UploadObjectOutput,
         _ snapshot: SingleObjectTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadObjectTransferComplete(input: input, output: output, snapshot: snapshot)
+            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
         }
     }
 
     private func onTransferFailed(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadObjectTransferListener],
         _ input: UploadObjectInput,
         _ snapshot: SingleObjectTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadObjectTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot)
         }
     }
 }
