@@ -250,14 +250,14 @@ Task {
     for try await uploadObjectTransferEvent in streamingTransferListener.uploadObjectEventStream {
         switch uploadObjectTransferEvent {
         case .uploadObjectInitiated(let input, let snapshot):
-            print("UploadObject operation initiated. ID: \(input.operationID)")
+            print("UploadObject operation initiated. ID: \(input.id)")
         case .uploadObjectBytesTransferred(let input, let snapshot):
             print("Transferred more bytes. Running total: \(snapshot.transferredBytes)")
         case .uploadObjectComplete(let input, let output, let snapshot):
-            print("Successfully finished UploadObject. ID: \(input.operationID)")
+            print("Successfully finished UploadObject. ID: \(input.id)")
             streamingTransferListener.closeStreams() // Close stream explicitly if it won't be used anymore.
         case .uploadObjectFailed(let input, let snapshot):
-            print("UploadObject failed. ID: \(input.operationID)")
+            print("UploadObject failed. ID: \(input.id)")
             streamingTransferListener.closeStreams() // Close stream explicitly if it won't be used anymore.
         }
     }

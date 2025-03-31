@@ -6,7 +6,7 @@
 //
 
 /// The synthetic output type for the `uploadDirectory` operation of `S3TransferManager`.
-public struct UploadDirectoryOutput: TransferOutput {
+public struct UploadDirectoryOutput: Sendable {
     /// The number of successfully uploaded objects.
     public let objectsUploaded: Int
     /// The number of failed uploads.

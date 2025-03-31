@@ -6,7 +6,7 @@
 //
 
 /// The transfer progress snapshot for single object operations `uploadObject` and `downloadObject`.
-public struct SingleObjectTransferProgressSnapshot: TransferProgressSnapshot {
+public struct SingleObjectTransferProgressSnapshot: Sendable {
     /// Total number of bytes transferred so far.
     public let transferredBytes: Int
     /// Total size of the transfer. Known beforehand for upload; unknown for download until completion.

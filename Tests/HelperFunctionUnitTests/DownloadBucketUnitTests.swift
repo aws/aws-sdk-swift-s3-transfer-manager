@@ -51,7 +51,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             destination: destination,
             s3Prefix: nil,
             s3Delimiter: "/",
-            filter: { object in return object.key!.hasPrefix("dir1") }
+            filter: { object in return !object.key!.hasPrefix("dir1") }
         )
         let expectedMap: [String: URL] = [
             "a.txt": URL(string: "dest/a.txt")!,
@@ -71,7 +71,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             destination: destination,
             s3Prefix: prefix,
             s3Delimiter: "/",
-            filter: { object in return false }
+            filter: { object in return true }
         )
         let expectedMap: [String: URL] = [
             "pre/a.txt": URL(string: "dest/a.txt")!,
@@ -92,7 +92,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             destination: destination,
             s3Prefix: nil,
             s3Delimiter: "-",
-            filter: { object in return false }
+            filter: { object in return true }
         )
         let expectedMap: [String: URL] = [
             "a.txt": URL(string: "dest/a.txt")!,

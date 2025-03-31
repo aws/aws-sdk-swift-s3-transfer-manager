@@ -22,7 +22,7 @@ public extension S3TransferManager {
     func downloadBucket(input: DownloadBucketInput) throws -> Task<DownloadBucketOutput, Error> {
         return Task {
             onTransferInitiated(
-                input.transferListeners,
+                input.directoryTransferListeners,
                 input,
                 DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )
@@ -90,7 +90,7 @@ public extension S3TransferManager {
                         } catch { // input.failurePolicy threw an error; bubble up the error.
                             // Error being thrown here automatically cancels all tasks within the throwing task group.
                             onTransferFailed(
-                                input.transferListeners,
+                                input.directoryTransferListeners,
                                 input,
                                 DirectoryTransferProgressSnapshot(
                                     transferredFiles: successfulDownloadCount,
@@ -111,7 +111,7 @@ public extension S3TransferManager {
                 objectsFailed: failedDownloadCount
             )
             onTransferComplete(
-                input.transferListeners,
+                input.directoryTransferListeners,
                 input,
                 downloadBucketOutput,
                 DirectoryTransferProgressSnapshot(
@@ -169,7 +169,7 @@ public extension S3TransferManager {
 
             // Use user-provided filter to skip objects.
             // If key ends with delimiter, it's a 0-byte file used by S3 to simulate directory structure; skip that too.
-            if filter(object) || originalKey.hasSuffix(s3Delimiter) {
+            if !filter(object) || originalKey.hasSuffix(s3Delimiter) {
                return nil
             }
 
@@ -223,7 +223,7 @@ public extension S3TransferManager {
             throw S3TMDownloadBucketError.FailedToCreateOutputStreamForFileURL(url: pair.value)
         }
         let downloadObjectInput = DownloadObjectInput(
-            operationID: input.operationID + "-\(operationNumber)",
+            id: input.id + "-\(operationNumber)",
             outputStream: outputStream,
             getObjectInput: GetObjectInput(
                 bucket: input.bucket,
@@ -232,7 +232,7 @@ public extension S3TransferManager {
                 checksumMode: config.checksumValidationEnabled ? .enabled : .sdkUnknown("DISABLED"),
                 key: pair.key
             ),
-            transferListeners: input.transferListeners
+            transferListeners: input.objectTransferListeners
         )
         do {
             // Create S3TM `downloadObject` task and await its completion before returning.
@@ -285,33 +285,33 @@ public extension S3TransferManager {
     // TransferListener helper functions for `downloadBucket`.
 
     private func onTransferInitiated(
-        _ listeners: [TransferListener],
+        _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onDownloadBucketTransferInitiated(input: input, snapshot: snapshot)
+            listener.onTransferInitiated(input: input, snapshot: snapshot)
         }
     }
 
     private func onTransferComplete(
-        _ listeners: [TransferListener],
+        _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
         _ output: DownloadBucketOutput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onDownloadBucketTransferComplete(input: input, output: output, snapshot: snapshot)
+            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
         }
     }
 
     private func onTransferFailed(
-        _ listeners: [TransferListener],
+        _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onDownloadBucketTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot)
         }
     }
 }

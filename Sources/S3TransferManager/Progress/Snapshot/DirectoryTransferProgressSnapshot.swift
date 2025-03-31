@@ -6,7 +6,7 @@
 //
 
 /// The transfer progress snapshot for directory operations `uploadDirectory` and `downloadBucket`.
-public struct DirectoryTransferProgressSnapshot: TransferProgressSnapshot {
+public struct DirectoryTransferProgressSnapshot: Sendable {
     /// Total number of files successfully transferred so far.
     public let transferredFiles: Int
     // `uploadDirectory` and `downloadBucket` use batch-processing; so it can't know the total number of files

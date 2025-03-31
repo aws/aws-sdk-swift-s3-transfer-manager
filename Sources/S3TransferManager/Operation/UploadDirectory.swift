@@ -24,7 +24,7 @@ public extension S3TransferManager {
     func uploadDirectory(input: UploadDirectoryInput) throws -> Task<UploadDirectoryOutput, Error> {
         return Task {
             onTransferInitiated(
-                input.transferListeners,
+                input.directoryTransferListeners,
                 input,
                 DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )
@@ -79,7 +79,7 @@ public extension S3TransferManager {
                         } catch { // input.failurePolicy threw an error; bubble up the error.
                             // Error being thrown here automatically cancels all tasks within the throwing task group.
                             onTransferFailed(
-                                input.transferListeners,
+                                input.directoryTransferListeners,
                                 input,
                                 DirectoryTransferProgressSnapshot(
                                     transferredFiles: successfulUploadCount,
@@ -100,7 +100,7 @@ public extension S3TransferManager {
                 objectsFailed: failedUploadCount
             )
             onTransferComplete(
-                input.transferListeners,
+                input.directoryTransferListeners,
                 input,
                 uploadDirectoryOutput,
                 DirectoryTransferProgressSnapshot(
@@ -221,7 +221,7 @@ public extension S3TransferManager {
         }
 
         let uploadObjectInput = UploadObjectInput(
-            operationID: input.operationID + "-\(operationNumber)",
+            id: input.id + "-\(operationNumber)",
             // This is the callback that allows custom modifications of
             //  the individual `PutObjectInput` structs for the SDK user.
             putObjectInput: input.putObjectRequestCallback(PutObjectInput(
@@ -230,7 +230,7 @@ public extension S3TransferManager {
                 checksumAlgorithm: config.checksumAlgorithm,
                 key: resolvedObjectKey
             )),
-            transferListeners: input.transferListeners
+            transferListeners: input.objectTransferListeners
         )
 
         do {
@@ -276,33 +276,33 @@ public extension S3TransferManager {
     // TransferListener helper functions for `uploadDirectory`.
 
     private func onTransferInitiated(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadDirectoryTransferInitiated(input: input, snapshot: snapshot)
+            listener.onTransferInitiated(input: input, snapshot: snapshot)
         }
     }
 
     private func onTransferComplete(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
         _ output: UploadDirectoryOutput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadDirectoryTransferComplete(input: input, output: output, snapshot: snapshot)
+            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
         }
     }
 
     private func onTransferFailed(
-        _ listeners: [TransferListener],
+        _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
         _ snapshot: DirectoryTransferProgressSnapshot
     ) {
         for listener in listeners {
-            listener.onUploadDirectoryTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot)
         }
     }
 }
