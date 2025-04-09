@@ -222,17 +222,18 @@ public extension S3TransferManager {
         guard let outputStream = OutputStream(url: pair.value, append: true) else {
             throw S3TMDownloadBucketError.FailedToCreateOutputStreamForFileURL(url: pair.value)
         }
+        let getObjectInput = GetObjectInput(
+            bucket: input.bucket,
+            // User must've set `s3Client.config.responseChecksumValidation` to `.whenRequired` as well
+            //  to disable response checksum validation.
+            checksumMode: config.checksumValidationEnabled ? .enabled : .sdkUnknown("DISABLED"),
+            key: pair.key
+        )
         let downloadObjectInput = DownloadObjectInput(
             id: input.id + "-\(operationNumber)",
             outputStream: outputStream,
-            getObjectInput: GetObjectInput(
-                bucket: input.bucket,
-                // User must've set `s3Client.config.responseChecksumValidation` to `.whenRequired` as well
-                //  to disable response checksum validation.
-                checksumMode: config.checksumValidationEnabled ? .enabled : .sdkUnknown("DISABLED"),
-                key: pair.key
-            ),
-            transferListeners: input.objectTransferListeners
+            getObjectInput: getObjectInput,
+            transferListeners: await input.objectTransferListenerFactory(getObjectInput)
         )
         do {
             // Create S3TM `downloadObject` task and await its completion before returning.

@@ -220,17 +220,18 @@ public extension S3TransferManager {
             return
         }
 
+        let putObjectInput = input.putObjectRequestCallback(PutObjectInput(
+            body: .stream(FileStream(fileHandle: fileHandle)),
+            bucket: input.bucket,
+            checksumAlgorithm: config.checksumAlgorithm,
+            key: resolvedObjectKey
+        ))
         let uploadObjectInput = UploadObjectInput(
             id: input.id + "-\(operationNumber)",
             // This is the callback that allows custom modifications of
             //  the individual `PutObjectInput` structs for the SDK user.
-            putObjectInput: input.putObjectRequestCallback(PutObjectInput(
-                body: .stream(FileStream(fileHandle: fileHandle)),
-                bucket: input.bucket,
-                checksumAlgorithm: config.checksumAlgorithm,
-                key: resolvedObjectKey
-            )),
-            transferListeners: input.objectTransferListeners
+            putObjectInput: putObjectInput,
+            transferListeners: await input.objectTransferListenerFactory(putObjectInput)
         )
 
         do {

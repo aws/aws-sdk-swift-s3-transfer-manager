@@ -29,8 +29,8 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     public let failurePolicy: FailurePolicy<DownloadBucketInput>
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on directory transfer status and progress.
     public let directoryTransferListeners: [DownloadBucketTransferListener]
-    /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on object transfer status and progress. Use to track transfer status and progress of individual objects in the directory.
-    public let objectTransferListeners: [DownloadObjectTransferListener]
+    /// The transfer listener factory closure called by `S3TransferManager` to create listeners for individual object transfer. Use to track download status and progress of individual objects in the bucket.
+    public let objectTransferListenerFactory: @Sendable (GetObjectInput) async -> [DownloadObjectTransferListener]
 
     /// Initializes `DownloadBucketInput` with provided parameters.
     ///
@@ -43,7 +43,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     ///   - getObjectRequestCallback: A closure that allows customizing the individual `GetObjectInput` passed to each part or range `getObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `GetObjectInput` without modification.
     ///   - failurePolicy: A closure that handles `downloadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest()`, which simply bubbles up the error to the caller and terminates the entire `downloadBucket` operation.
     ///   - directoryTransferListeners: An array of `DownloadBucketTransferListener`. The transfer status and progress of the directory transfer operation will be published to each transfer listener provided here. Default value is an empty array.
-    ///   - objectTransferListeners: An array of `DownloadObjectTransferListener`. The transfer status and progress of each individual object transfer operation will be published to each transfer listener provided here. Default value is an empty array.
+    ///   - objectTransferListenerFactory: A closure that creates and returns an array of `DownloadObjectTransferListener` instances for each indiviual object transfer. The transfer status and progress of each individual object transfer operation will be published to the listeners created here. Default is a closure that returns an empty array.
     public init(
         bucket: String,
         destination: URL,
@@ -56,7 +56,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         failurePolicy: @escaping FailurePolicy<DownloadBucketInput> = CannedFailurePolicy
             .rethrowExceptionToTerminateRequest(),
         directoryTransferListeners: [DownloadBucketTransferListener] = [],
-        objectTransferListeners: [DownloadObjectTransferListener] = []
+        objectTransferListenerFactory: @Sendable @escaping (GetObjectInput) async -> [DownloadObjectTransferListener] = { _ in [] }
     ) {
         self.bucket = bucket
         self.destination = destination
@@ -66,6 +66,6 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         self.getObjectRequestCallback = getObjectRequestCallback
         self.failurePolicy = failurePolicy
         self.directoryTransferListeners = directoryTransferListeners
-        self.objectTransferListeners = objectTransferListeners
+        self.objectTransferListenerFactory = objectTransferListenerFactory
     }
 }
