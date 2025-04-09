@@ -5,21 +5,23 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// The `TransferListener` type that streams `downloadBucket` transfer opration events to `AsyncStream` to allow asynchronous and customized event handling.
+/// The `TransferListener` type that streams `downloadBucket` transfer opration events to `AsyncThrowingStream` to allow asynchronous and customized event handling.
 ///
 /// This transfer listener allows custom handling of each transfer event defined by the `DownloadBucketTransferEvent` enum.
 /// To use, first initialize an instance of the listener, and include it as one of the listeners in the input (i.e., `DownloadBucketInput.transferListeners`).
 /// Then, start up a `Task` that asynchronously consumes the events from the stream before invoking `downloadBucket`.
 /// After you're done with using the listener, you must explicitly close the underlying stream by calling `closeStream()` on it.
+///
+/// In the case of transfer failure, failure event is streamed before the stream is closed with an error.
 public final class DownloadBucketStreamingTransferListener: DownloadBucketTransferListener {
-    /// The async stream that can be asynchronously iterated on to retrieve the published events from `downloadBucket`.
-    public let eventStream: AsyncStream<DownloadBucketTransferEvent>
+    /// The async throwing stream that can be asynchronously iterated on to retrieve the published events from `downloadBucket`.
+    public let eventStream: AsyncThrowingStream<DownloadBucketTransferEvent, Error>
 
     // The continuations used internally to send events to the streams.
-    private let continuation: AsyncStream<DownloadBucketTransferEvent>.Continuation
+    private let continuation: AsyncThrowingStream<DownloadBucketTransferEvent, Error>.Continuation
 
     public init() {
-        (self.eventStream, self.continuation) = AsyncStream.makeStream()
+        (self.eventStream, self.continuation) = AsyncThrowingStream.makeStream()
     }
 
     /// Closes the stream used by the `DownloadBucketStreamingTransferListener` instance.
@@ -55,7 +57,8 @@ public final class DownloadBucketStreamingTransferListener: DownloadBucketTransf
 
     public func onTransferFailed(
         input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot
+        snapshot: DirectoryTransferProgressSnapshot,
+        error: Error
     ) {
         continuation.yield(
             DownloadBucketTransferEvent.failed(
@@ -63,6 +66,7 @@ public final class DownloadBucketStreamingTransferListener: DownloadBucketTransf
                 snapshot: snapshot
             )
         )
+        continuation.finish(throwing: error)
     }
 }
 

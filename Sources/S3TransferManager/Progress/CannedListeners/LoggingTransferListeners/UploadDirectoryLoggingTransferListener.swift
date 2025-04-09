@@ -38,8 +38,9 @@ public struct UploadDirectoryLoggingTransferListener: UploadDirectoryTransferLis
 
     public func onTransferFailed(
         input: UploadDirectoryInput,
-        snapshot: DirectoryTransferProgressSnapshot
+        snapshot: DirectoryTransferProgressSnapshot,
+        error: Error
     ) {
-        log(input.id, "Transfer failed.")
+        log(input.id, "Transfer failed with error: \(error)")
     }
 }

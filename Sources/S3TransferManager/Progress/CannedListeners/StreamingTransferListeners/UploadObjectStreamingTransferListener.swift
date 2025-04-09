@@ -5,21 +5,23 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// The `TransferListener` type that streams `uploadObject` transfer opration events to `AsyncStream` to allow asynchronous and customized event handling.
+/// The `TransferListener` type that streams `uploadObject` transfer opration events to `AsyncThrowingStream` to allow asynchronous and customized event handling.
 ///
 /// This transfer listener allows custom handling of each transfer event defined by the `UploadObjectTransferEvent` enum.
 /// To use, first initialize an instance of the listener, and include it as one of the listeners in the input (i.e., `UploadObjectInput.transferListeners`).
 /// Then, start up a `Task` that asynchronously consumes the events from the stream before invoking `uploadObject`.
 /// After you're done with using the listener, you must explicitly close the underlying stream by calling `closeStream()` on it.
+///
+/// In the case of transfer failure, failure event is streamed before the stream is closed with an error.
 public final class UploadObjectStreamingTransferListener: UploadObjectTransferListener {
-    /// The async stream that can be asynchronously iterated on to retrieve the published events from `uploadObject`.
-    public let eventStream: AsyncStream<UploadObjectTransferEvent>
+    /// The async throwing stream that can be asynchronously iterated on to retrieve the published events from `uploadObject`.
+    public let eventStream: AsyncThrowingStream<UploadObjectTransferEvent, Error>
 
     // The continuations used internally to send events to the streams.
-    private let continuation: AsyncStream<UploadObjectTransferEvent>.Continuation
+    private let continuation: AsyncThrowingStream<UploadObjectTransferEvent, Error>.Continuation
 
     public init() {
-        (self.eventStream, self.continuation) = AsyncStream.makeStream()
+        (self.eventStream, self.continuation) = AsyncThrowingStream.makeStream()
     }
 
     /// Closes the stream used by the `UploadObjectStreamingTransferListener` instance.
@@ -67,7 +69,8 @@ public final class UploadObjectStreamingTransferListener: UploadObjectTransferLi
 
     public func onTransferFailed(
         input: UploadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
+        snapshot: SingleObjectTransferProgressSnapshot,
+        error: Error
     ) {
         continuation.yield(
             UploadObjectTransferEvent.failed(
@@ -75,6 +78,7 @@ public final class UploadObjectStreamingTransferListener: UploadObjectTransferLi
                 snapshot: snapshot
             )
         )
+        continuation.finish(throwing: error)
     }
 }
 

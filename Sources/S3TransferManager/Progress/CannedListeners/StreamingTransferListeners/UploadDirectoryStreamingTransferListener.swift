@@ -5,21 +5,23 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// The `TransferListener` type that streams `uploadDirectory` transfer opration events to `AsyncStream` to allow asynchronous and customized event handling.
+/// The `TransferListener` type that streams `uploadDirectory` transfer opration events to `AsyncThrowingStream` to allow asynchronous and customized event handling.
 ///
 /// This transfer listener allows custom handling of each transfer event defined by the `UploadDirectoryTransferEvent` enum.
 /// To use, first initialize an instance of the listener, and include it as one of the listeners in the input (i.e., `UploadDirectoryInput.transferListeners`).
 /// Then, start up a `Task` that asynchronously consumes the events from the stream before invoking `uploadDirectory`.
 /// After you're done with using the listener, you must explicitly close the underlying stream by calling `closeStream()` on it.
+///
+/// In the case of transfer failure, failure event is streamed before the stream is closed with an error.
 public final class UploadDirectoryStreamingTransferListener: UploadDirectoryTransferListener {
-    /// The async stream that can be asynchronously iterated on to retrieve the published events from `uploadDirectory`.
-    public let eventStream: AsyncStream<UploadDirectoryTransferEvent>
+    /// The async throwing stream that can be asynchronously iterated on to retrieve the published events from `uploadDirectory`.
+    public let eventStream: AsyncThrowingStream<UploadDirectoryTransferEvent, Error>
 
     // The continuations used internally to send events to the streams.
-    private let continuation: AsyncStream<UploadDirectoryTransferEvent>.Continuation
+    private let continuation: AsyncThrowingStream<UploadDirectoryTransferEvent, Error>.Continuation
 
     public init() {
-        (self.eventStream, self.continuation) = AsyncStream.makeStream()
+        (self.eventStream, self.continuation) = AsyncThrowingStream.makeStream()
     }
 
     /// Closes the stream used by the `UploadDirectoryStreamingTransferListener` instance.
@@ -55,7 +57,8 @@ public final class UploadDirectoryStreamingTransferListener: UploadDirectoryTran
 
     public func onTransferFailed(
         input: UploadDirectoryInput,
-        snapshot: DirectoryTransferProgressSnapshot
+        snapshot: DirectoryTransferProgressSnapshot,
+        error: Error
     ) {
         continuation.yield(
             UploadDirectoryTransferEvent.failed(
@@ -63,6 +66,7 @@ public final class UploadDirectoryStreamingTransferListener: UploadDirectoryTran
                 snapshot: snapshot
             )
         )
+        continuation.finish(throwing: error)
     }
 }
 

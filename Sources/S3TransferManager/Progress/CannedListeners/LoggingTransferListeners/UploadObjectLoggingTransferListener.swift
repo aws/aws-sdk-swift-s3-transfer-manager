@@ -46,9 +46,10 @@ public struct UploadObjectLoggingTransferListener: UploadObjectTransferListener,
 
     public func onTransferFailed(
         input: UploadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
+        snapshot: SingleObjectTransferProgressSnapshot,
+        error: Error
     ) {
-        log(input.id, "Transfer failed.")
+        log(input.id, "Transfer failed with error: \(error)")
     }
 
     // Helper function that constructs progress bar string for `uploadObject`.

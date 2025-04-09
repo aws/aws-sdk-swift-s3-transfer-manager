@@ -46,8 +46,9 @@ public struct DownloadObjectLoggingTransferListener: DownloadObjectTransferListe
 
     public func onTransferFailed(
         input: DownloadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
+        snapshot: SingleObjectTransferProgressSnapshot,
+        error: Error
     ) {
-        log(input.id, "Transfer failed.")
+        log(input.id, "Transfer failed with error: \(error)")
     }
 }

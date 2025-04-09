@@ -38,8 +38,9 @@ public struct DownloadBucketLoggingTransferListener: DownloadBucketTransferListe
 
     public func onTransferFailed(
         input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot
+        snapshot: DirectoryTransferProgressSnapshot,
+        error: Error
     ) {
-        log(input.id, "Transfer failed.")
+        log(input.id, "Transfer failed with error: \(error)")
     }
 }
