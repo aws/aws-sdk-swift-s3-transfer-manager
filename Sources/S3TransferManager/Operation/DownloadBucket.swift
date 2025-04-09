@@ -6,6 +6,7 @@
 //
 
 import AWSS3
+import class Foundation.DispatchQueue
 import class Foundation.FileManager
 import class Foundation.OutputStream
 import struct Foundation.URL
@@ -27,99 +28,103 @@ public extension S3TransferManager {
                 DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )
             let s3 = config.s3Client
-            try validateOrCreateDestinationDirectory(input: input)
+            // Variables to store the results of `downloadObject` child tasks.
+            var successfulDownloadCount = 0, failedDownloadCount = 0
+            // Queue used to synchronize download count variable updates.
+            let queue = DispatchQueue(label: "DownloadCountQueue")
 
-            let objects = try await fetchS3ObjectsUsingListObjectsV2Paginated(s3: s3, input: input)
-            let objectKeyToResolvedFileURLMap: [String: URL] = getFileURLsResolvedFromObjectKeys(
-                objects: objects,
-                destination: input.destination,
-                s3Prefix: input.s3Prefix,
-                s3Delimiter: input.s3Delimiter,
-                filter: input.filter
-            )
-            // Subset of `objectKeyToResolvedFileURLMap` above.
-            // If resolved fileURL escapes the destination directory, it gets skipped.
-            let objectKeyToCreatedFileURLMap: [String: URL] = try createDestinationFiles(
-                keyToResolvedURLMapping: objectKeyToResolvedFileURLMap
-            )
+            do {
+                try validateOrCreateDestinationDirectory(input: input)
 
-            let (successfulDownloadCount, failedDownloadCount) = try await withThrowingTaskGroup(
-                // Each child task returns the result of a single `downloadObject` call.
-                of: Result<Void, Error>.self,
-                // Task group returns success & failure counts of all the `downloadObject` calls.
-                returning: (successfulDownloadCount: Int, failedDownloadCount: Int).self
-            ) { group in
-                // Add `downloadObject` child tasks.
-                var downloadObjectOperationNum = 1
-                for pair in objectKeyToCreatedFileURLMap {
-                    // Save current operation num as constant let.
-                    // Using `downloadObjectOperationNum` directly in the group.addTask closure below results
-                    //  in same value being used for the tasks bc var is a reference type & tasks get created
-                    //  before they even start running. E.g., by the first task runs, `downloadObjectOperationNum`
-                    //  could already be updated to its highest value.
-                    let operationNum = downloadObjectOperationNum
-                    group.addTask {
-                        do {
-                            try Task.checkCancellation()
-                            _ = try await self.downloadSingleObject(
-                                objectKeyToURL: pair,
-                                input: input,
-                                operationNumber: operationNum // Used to construct child operation ID for listeners.
-                            )
-                            return .success(())
-                        } catch {
-                            // Errors are caught and wrapped in .failure to allow individual error handling.
-                            return .failure(error)
-                        }
-                    }
-                    downloadObjectOperationNum += 1
-                }
-
-                // Collect results of `downloadObject` child tasks.
-                var successfulDownloadCount = 0, failedDownloadCount = 0
-
-                while let downloadObjectResult = try await group.next() {
-                    switch downloadObjectResult {
-                    case .success:
-                        successfulDownloadCount += 1
-                    case .failure(let error):
-                        failedDownloadCount += 1
-                        do {
-                            // Call failure policy closure to handle `downloadObject` failure.
-                            try await input.failurePolicy(error, input)
-                        } catch { // input.failurePolicy threw an error; bubble up the error.
-                            // Error being thrown here automatically cancels all tasks within the throwing task group.
-                            onTransferFailed(
-                                input.directoryTransferListeners,
-                                input,
-                                DirectoryTransferProgressSnapshot(
-                                    transferredFiles: successfulDownloadCount,
-                                    totalFiles: successfulDownloadCount + failedDownloadCount
-                                )
-                            )
-                            throw error
-                        }
-                    }
-                }
-
-                // Return the counts.
-                return (successfulDownloadCount, failedDownloadCount)
-            }
-
-            let downloadBucketOutput = DownloadBucketOutput(
-                objectsDownloaded: successfulDownloadCount,
-                objectsFailed: failedDownloadCount
-            )
-            onTransferComplete(
-                input.directoryTransferListeners,
-                input,
-                downloadBucketOutput,
-                DirectoryTransferProgressSnapshot(
-                    transferredFiles: successfulDownloadCount,
-                    totalFiles: successfulDownloadCount + failedDownloadCount
+                let objects = try await fetchS3ObjectsUsingListObjectsV2Paginated(s3: s3, input: input)
+                let objectKeyToResolvedFileURLMap: [String: URL] = getFileURLsResolvedFromObjectKeys(
+                    objects: objects,
+                    destination: input.destination,
+                    s3Prefix: input.s3Prefix,
+                    s3Delimiter: input.s3Delimiter,
+                    filter: input.filter
                 )
-            )
-            return downloadBucketOutput
+                // Subset of `objectKeyToResolvedFileURLMap` above.
+                // If resolved fileURL escapes the destination directory, it gets skipped.
+                let objectKeyToCreatedFileURLMap: [String: URL] = try createDestinationFiles(
+                    keyToResolvedURLMapping: objectKeyToResolvedFileURLMap
+                )
+
+                try await withThrowingTaskGroup(
+                    // Each child task returns the result of a single `downloadObject` call.
+                    of: Result<Void, Error>.self,
+                    // Task group returns nothing.
+                    returning: Void.self
+                ) { group in
+                    // Add `downloadObject` child tasks.
+                    var downloadObjectOperationNum = 1
+                    for pair in objectKeyToCreatedFileURLMap {
+                        // Save current operation num as constant let.
+                        // Using `downloadObjectOperationNum` directly in the group.addTask closure below results
+                        //  in same value being used for the tasks bc var is a reference type & tasks get created
+                        //  before they even start running. E.g., by the first task runs, `downloadObjectOperationNum`
+                        //  could already be updated to its highest value.
+                        let operationNum = downloadObjectOperationNum
+                        group.addTask {
+                            do {
+                                try Task.checkCancellation()
+                                _ = try await self.downloadSingleObject(
+                                    objectKeyToURL: pair,
+                                    input: input,
+                                    operationNumber: operationNum // Used to construct child operation ID for listeners.
+                                )
+                                return .success(())
+                            } catch {
+                                // Errors are caught and wrapped in .failure to allow individual error handling.
+                                return .failure(error)
+                            }
+                        }
+                        downloadObjectOperationNum += 1
+                    }
+
+                    while let downloadObjectResult = try await group.next() {
+                        switch downloadObjectResult {
+                        case .success:
+                            queue.sync {
+                                successfulDownloadCount += 1
+                            }
+                        case .failure(let error):
+                            queue.sync {
+                                failedDownloadCount += 1
+                            }
+                            // Call failure policy closure to handle `downloadObject` failure.
+                            // If this throws an error, all tasks within the throwing task group are cancelled automatically.
+                            try await input.failurePolicy(error, input)
+                        }
+                    }
+                }
+
+                let downloadBucketOutput = DownloadBucketOutput(
+                    objectsDownloaded: successfulDownloadCount,
+                    objectsFailed: failedDownloadCount
+                )
+                onTransferComplete(
+                    input.directoryTransferListeners,
+                    input,
+                    downloadBucketOutput,
+                    DirectoryTransferProgressSnapshot(
+                        transferredFiles: successfulDownloadCount,
+                        totalFiles: successfulDownloadCount + failedDownloadCount
+                    )
+                )
+                return downloadBucketOutput
+            } catch {
+                onTransferFailed(
+                    input.directoryTransferListeners,
+                    input,
+                    DirectoryTransferProgressSnapshot(
+                        transferredFiles: successfulDownloadCount,
+                        totalFiles: successfulDownloadCount + failedDownloadCount
+                    ),
+                    error
+                )
+                throw error
+            }
         }
     }
 
@@ -309,10 +314,11 @@ public extension S3TransferManager {
     private func onTransferFailed(
         _ listeners: [DownloadBucketTransferListener],
         _ input: DownloadBucketInput,
-        _ snapshot: DirectoryTransferProgressSnapshot
+        _ snapshot: DirectoryTransferProgressSnapshot,
+        _ error: Error
     ) {
         for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
         }
     }
 }

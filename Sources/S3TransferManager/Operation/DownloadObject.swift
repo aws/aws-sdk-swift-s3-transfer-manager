@@ -143,7 +143,8 @@ public extension S3TransferManager {
                 onTransferFailed(
                     input.transferListeners,
                     input,
-                    SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes)
+                    SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes),
+                    error
                 )
                 // `downloadObject` call finished with an error. Release the semaphore instance & bubble up the error.
                 await self.semaphoreManager.releaseSemaphoreInstance(forBucket: input.getObjectInput.bucket!)
@@ -564,10 +565,11 @@ public extension S3TransferManager {
     private func onTransferFailed(
         _ listeners: [DownloadObjectTransferListener],
         _ input: DownloadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
+        _ snapshot: SingleObjectTransferProgressSnapshot,
+        _ error: Error
     ) {
         for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
         }
     }
 }

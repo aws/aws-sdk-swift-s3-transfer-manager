@@ -33,7 +33,8 @@ public protocol DownloadObjectTransferListener: Sendable {
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
     func onTransferFailed(
         input: DownloadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
+        snapshot: SingleObjectTransferProgressSnapshot,
+        error: Error
     )
 }
 

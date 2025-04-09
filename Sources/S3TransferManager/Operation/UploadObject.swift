@@ -24,53 +24,64 @@ public extension S3TransferManager {
     /// This operation does not support uploading a stream payload of unknown length.
     func uploadObject(input: UploadObjectInput) throws -> Task<UploadObjectOutput, Error> {
         return Task {
-            let payloadSize = try await resolvePayloadSize(of: input.putObjectInput.body)
-            onTransferInitiated(
-                input.transferListeners,
-                input,
-                SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
-            )
-
             let s3 = config.s3Client
             let semaphore = await semaphoreManager.getSemaphoreInstance(forBucket: input.putObjectInput.bucket!)
 
-            // If payload is below threshold, just do a single putObject.
-            if payloadSize < config.multipartUploadThresholdBytes {
-                await wait(semaphore)
-                do {
-                    let putObjectOutput = try await s3.putObject(input: input.putObjectInput)
-                    await signalAndReleaseSemaphore(semaphore, input.putObjectInput.bucket!)
-                    let uploadObjectOutput = UploadObjectOutput(putObjectOutput: putObjectOutput)
-                    onBytesTransferred(
-                        input.transferListeners,
-                        input,
-                        SingleObjectTransferProgressSnapshot(transferredBytes: payloadSize, totalBytes: payloadSize)
-                    )
-                    onTransferComplete(
-                        input.transferListeners,
-                        input,
-                        uploadObjectOutput,
-                        SingleObjectTransferProgressSnapshot(transferredBytes: payloadSize, totalBytes: payloadSize)
-                    )
-                    return uploadObjectOutput
-                } catch {
-                    await signalAndReleaseSemaphore(semaphore, input.putObjectInput.bucket!)
-                    onTransferFailed(
-                        input.transferListeners,
-                        input,
-                        SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
-                    )
-                    throw error
+            var payloadSize: Int = -1
+            var uploadID: String = ""
+            var numParts: Int = -1
+            var partSize: Int = -1
+
+            do {
+                payloadSize = try await resolvePayloadSize(of: input.putObjectInput.body)
+                onTransferInitiated(
+                    input.transferListeners,
+                    input,
+                    SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
+                )
+
+                // If payload is below threshold, just do a single putObject.
+                if payloadSize < config.multipartUploadThresholdBytes {
+                    await wait(semaphore)
+                    do {
+                        let putObjectOutput = try await s3.putObject(input: input.putObjectInput)
+                        await signalAndReleaseSemaphore(semaphore, input.putObjectInput.bucket!)
+                        let uploadObjectOutput = UploadObjectOutput(putObjectOutput: putObjectOutput)
+                        onBytesTransferred(
+                            input.transferListeners,
+                            input,
+                            SingleObjectTransferProgressSnapshot(transferredBytes: payloadSize, totalBytes: payloadSize)
+                        )
+                        onTransferComplete(
+                            input.transferListeners,
+                            input,
+                            uploadObjectOutput,
+                            SingleObjectTransferProgressSnapshot(transferredBytes: payloadSize, totalBytes: payloadSize)
+                        )
+                        return uploadObjectOutput
+                    } catch {
+                        await signalAndReleaseSemaphore(semaphore, input.putObjectInput.bucket!)
+                        throw error
+                    }
                 }
+
+                // Otherwise, use MPU.
+                (uploadID, numParts, partSize) = try await prepareMPU(
+                    s3: s3,
+                    payloadSize: payloadSize,
+                    input: input,
+                    semaphore: semaphore
+                )
+            } catch {
+                onTransferFailed(
+                    input.transferListeners,
+                    input,
+                    SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize),
+                    error
+                )
+                throw error
             }
 
-            // Otherwise, use MPU.
-            let (uploadID, numParts, partSize) = try await prepareMPU(
-                s3: s3,
-                payloadSize: payloadSize,
-                input: input,
-                semaphore: semaphore
-            )
             logger.debug("Successfully created MPU with the upload ID: \"\(uploadID)\".")
 
             // The actor used to keep track of the number of uploaded bytes.
@@ -117,7 +128,8 @@ public extension S3TransferManager {
                     SingleObjectTransferProgressSnapshot(
                         transferredBytes: await progressTracker.transferredBytes,
                         totalBytes: payloadSize
-                    )
+                    ),
+                    originalError
                 )
                 do {
                     try await abortMPU(
@@ -187,7 +199,8 @@ public extension S3TransferManager {
             onTransferFailed(
                 input.transferListeners,
                 input,
-                SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
+                SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize),
+                S3TMUploadObjectError.failedToCreateMPU
             )
             throw S3TMUploadObjectError.failedToCreateMPU
         } catch {
@@ -197,7 +210,8 @@ public extension S3TransferManager {
             onTransferFailed(
                 input.transferListeners,
                 input,
-                SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
+                SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize),
+                error
             )
             throw error
         }
@@ -404,10 +418,11 @@ public extension S3TransferManager {
     private func onTransferFailed(
         _ listeners: [UploadObjectTransferListener],
         _ input: UploadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
+        _ snapshot: SingleObjectTransferProgressSnapshot,
+        _ error: Error
     ) {
         for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
         }
     }
 }

@@ -27,7 +27,8 @@ public protocol UploadDirectoryTransferListener: Sendable {
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
     func onTransferFailed(
         input: UploadDirectoryInput,
-        snapshot: DirectoryTransferProgressSnapshot
+        snapshot: DirectoryTransferProgressSnapshot,
+        error: Error
     )
 }
 

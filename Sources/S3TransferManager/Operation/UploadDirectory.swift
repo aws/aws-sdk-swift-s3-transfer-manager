@@ -6,6 +6,7 @@
 //
 
 import AWSS3
+import class Foundation.DispatchQueue
 import class Foundation.FileHandle
 import class Foundation.FileManager
 import class SmithyStreams.FileStream
@@ -28,87 +29,93 @@ public extension S3TransferManager {
                 input,
                 DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )
-            let nestedFileURLs = try getNestedFileURLs(
-                in: input.source,
-                recursive: input.recursive,
-                followSymbolicLinks: input.followSymbolicLinks
-            )
-            let (successfulUploadCount, failedUploadCount) = try await withThrowingTaskGroup(
-                // Each child task returns the result of a single `uploadObject` call.
-                of: Result<Void, Error>.self,
-                // Task group returns success & failure counts of all the `uploadObject` calls.
-                returning: (successfulUploadCount: Int, failedUploadCount: Int).self
-            ) { group in
-                // Add `uploadObject` child tasks.
-                var uploadObjectOperationNum = 1
-                for url in nestedFileURLs {
-                    // Save current operation num as constant let.
-                    // Using `uploadObjectOperationNum` directly in the group.addTask closure below results
-                    //  in same value being used for the tasks bc var is a reference type & tasks get created
-                    //  before they even start running. E.g., by the first task runs, `uploadObjectOperationNum`
-                    //  could already be updated to its highest value.
-                    let operationNum = uploadObjectOperationNum
-                    group.addTask {
-                        do {
-                            try Task.checkCancellation()
-                            _ = try await self.uploadObjectFromURL(
-                                url: url,
-                                input: input,
-                                operationNumber: operationNum
-                            )
-                            return .success(())
-                        } catch {
-                            // Errors are caught and wrapped in .failure to allow individual error handling.
-                            return .failure(error)
-                        }
-                    }
-                    uploadObjectOperationNum += 1
-                }
 
-                // Collect results of `uploadObject` child tasks.
-                var successfulUploadCount = 0, failedUploadCount = 0
-                while let uploadObjectResult = try await group.next() {
-                    switch uploadObjectResult {
-                    case .success:
-                        successfulUploadCount += 1
-                    case .failure(let error):
-                        failedUploadCount += 1
-                        do {
-                            // Call failure policy closure to handle `uploadObject` failure.
-                            try await input.failurePolicy(error, input)
-                        } catch { // input.failurePolicy threw an error; bubble up the error.
-                            // Error being thrown here automatically cancels all tasks within the throwing task group.
-                            onTransferFailed(
-                                input.directoryTransferListeners,
-                                input,
-                                DirectoryTransferProgressSnapshot(
-                                    transferredFiles: successfulUploadCount,
-                                    totalFiles: successfulUploadCount + failedUploadCount
-                                )
-                            )
-                            throw error
-                        }
-                    }
-                }
+            // Variables to store the results of `uploadObject` child tasks.
+            var successfulUploadCount = 0, failedUploadCount = 0
+            // Queue used to synchronize upload count variable updates.
+            let queue = DispatchQueue(label: "UploadCountQueue")
 
-                // Return the counts.
-                return (successfulUploadCount, failedUploadCount)
-            }
-
-            let uploadDirectoryOutput = UploadDirectoryOutput(
-                objectsUploaded: successfulUploadCount,
-                objectsFailed: failedUploadCount
-            )
-            onTransferComplete(
-                input.directoryTransferListeners,
-                input,
-                uploadDirectoryOutput,
-                DirectoryTransferProgressSnapshot(
-                    transferredFiles: successfulUploadCount,
-                    totalFiles: successfulUploadCount + failedUploadCount
+            do {
+                let nestedFileURLs = try getNestedFileURLs(
+                    in: input.source,
+                    recursive: input.recursive,
+                    followSymbolicLinks: input.followSymbolicLinks
                 )
-            )
-            return uploadDirectoryOutput
+                try await withThrowingTaskGroup(
+                    // Each child task returns the result of a single `uploadObject` call.
+                    of: Result<Void, Error>.self,
+                    // Task group returns nothing.
+                    returning: Void.self
+                ) { group in
+                    // Add `uploadObject` child tasks.
+                    var uploadObjectOperationNum = 1
+                    for url in nestedFileURLs {
+                        // Save current operation num as constant let.
+                        // Using `uploadObjectOperationNum` directly in the group.addTask closure below results
+                        //  in same value being used for the tasks bc var is a reference type & tasks get created
+                        //  before they even start running. E.g., by the first task runs, `uploadObjectOperationNum`
+                        //  could already be updated to its highest value.
+                        let operationNum = uploadObjectOperationNum
+                        group.addTask {
+                            do {
+                                try Task.checkCancellation()
+                                _ = try await self.uploadObjectFromURL(
+                                    url: url,
+                                    input: input,
+                                    operationNumber: operationNum
+                                )
+                                return .success(())
+                            } catch {
+                                // Errors are caught and wrapped in .failure to allow individual error handling.
+                                return .failure(error)
+                            }
+                        }
+                        uploadObjectOperationNum += 1
+                    }
+
+                    while let uploadObjectResult = try await group.next() {
+                        switch uploadObjectResult {
+                        case .success:
+                            queue.sync {
+                                successfulUploadCount += 1
+                            }
+                        case .failure(let error):
+                            queue.sync {
+                                failedUploadCount += 1
+                            }
+                            // Call failure policy closure to handle `uploadObject` failure.
+                            // If this throws an error, all tasks within the throwing task group are cancelled automatically.
+                            try await input.failurePolicy(error, input)
+                        }
+                    }
+                }
+
+                let uploadDirectoryOutput = UploadDirectoryOutput(
+                    objectsUploaded: successfulUploadCount,
+                    objectsFailed: failedUploadCount
+                )
+                onTransferComplete(
+                    input.directoryTransferListeners,
+                    input,
+                    uploadDirectoryOutput,
+                    DirectoryTransferProgressSnapshot(
+                        transferredFiles: successfulUploadCount,
+                        totalFiles: successfulUploadCount + failedUploadCount
+                    )
+                )
+                return uploadDirectoryOutput
+            } catch {
+                onTransferFailed(
+                    input.directoryTransferListeners,
+                    input,
+                    DirectoryTransferProgressSnapshot(
+                        transferredFiles: successfulUploadCount,
+                        totalFiles: successfulUploadCount + failedUploadCount
+                    ),
+                    error
+                )
+                throw error
+            }
         }
     }
 
@@ -300,10 +307,11 @@ public extension S3TransferManager {
     private func onTransferFailed(
         _ listeners: [UploadDirectoryTransferListener],
         _ input: UploadDirectoryInput,
-        _ snapshot: DirectoryTransferProgressSnapshot
+        _ snapshot: DirectoryTransferProgressSnapshot,
+        _ error: Error
     ) {
         for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot)
+            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
         }
     }
 }

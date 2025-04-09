@@ -27,7 +27,8 @@ public protocol DownloadBucketTransferListener: Sendable {
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
     func onTransferFailed(
         input: DownloadBucketInput,
-        snapshot: DirectoryTransferProgressSnapshot
+        snapshot: DirectoryTransferProgressSnapshot,
+        error: Error
     )
 }
 

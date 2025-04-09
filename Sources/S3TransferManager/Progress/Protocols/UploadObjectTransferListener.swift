@@ -33,7 +33,8 @@ public protocol UploadObjectTransferListener: Sendable {
     /// This method is invoked when the transfer has failed. It is called exactly once for a failed transfer.
     func onTransferFailed(
         input: UploadObjectInput,
-        snapshot: SingleObjectTransferProgressSnapshot
+        snapshot: SingleObjectTransferProgressSnapshot,
+        error: Error
     )
 }
 
