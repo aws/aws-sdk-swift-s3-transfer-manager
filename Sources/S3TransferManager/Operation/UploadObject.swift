@@ -12,6 +12,7 @@ import enum Smithy.ByteStream
 import struct Foundation.Data
 
 public extension S3TransferManager {
+    // swiftlint:disable function_body_length
     /// Uploads a single object to an S3 bucket.
     ///
     /// Returns a `Task` immediately after function call; upload is handled in the background using asynchronous child tasks.
@@ -152,6 +153,7 @@ public extension S3TransferManager {
             }
         }
     }
+    // swiftlint:enable function_body_length
 
     internal func resolvePayloadSize(of body: ByteStream?) async throws -> Int {
         switch body {

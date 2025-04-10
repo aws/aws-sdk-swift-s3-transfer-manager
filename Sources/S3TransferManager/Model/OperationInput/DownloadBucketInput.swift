@@ -56,7 +56,9 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         failurePolicy: @escaping FailurePolicy<DownloadBucketInput> = CannedFailurePolicy
             .rethrowExceptionToTerminateRequest(),
         directoryTransferListeners: [DownloadBucketTransferListener] = [],
-        objectTransferListenerFactory: @Sendable @escaping (GetObjectInput) async -> [DownloadObjectTransferListener] = { _ in [] }
+        objectTransferListenerFactory: @Sendable @escaping (
+            GetObjectInput
+        ) async -> [DownloadObjectTransferListener] = { _ in [] }
     ) {
         self.bucket = bucket
         self.destination = destination

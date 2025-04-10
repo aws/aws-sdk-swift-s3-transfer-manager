@@ -60,7 +60,9 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         failurePolicy: @escaping FailurePolicy<UploadDirectoryInput> = CannedFailurePolicy
             .rethrowExceptionToTerminateRequest(),
         directoryTransferListeners: [UploadDirectoryTransferListener] = [],
-        objectTransferListenerFactory: @Sendable @escaping (PutObjectInput) async -> [UploadObjectTransferListener] = { _ in [] }
+        objectTransferListenerFactory: @Sendable @escaping (
+            PutObjectInput
+        ) async -> [UploadObjectTransferListener] = { _ in [] }
     ) throws {
         self.bucket = bucket
         self.source = source
