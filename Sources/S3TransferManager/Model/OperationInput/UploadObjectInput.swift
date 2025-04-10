@@ -10,24 +10,24 @@ import enum Smithy.ByteStream
 import struct Foundation.UUID
 
 /// The synthetic input type for the `uploadObject` operation of `S3TransferManager`.
-public struct UploadObjectInput: TransferInput {
+public struct UploadObjectInput: Sendable, Identifiable {
     /// The unique ID for the operation; can be used to log or identify a specific request.
-    public let operationID: String
+    public let id: String
     /// The input struct for the object you want to upload.
     public let putObjectInput: PutObjectInput
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on transfer status and progress.
-    public let transferListeners: [TransferListener]
+    public let transferListeners: [UploadObjectTransferListener]
 
     /// Initializes `UploadObjectInput` with provided parameters.
     ///
     /// - Parameters:
     ///   - putObjectInput: An instance of the `PutObjectInput`.
-    ///   - transferListeners: An array of `TransferListener`. The transfer status and progress of the operation will be published to each transfer listener provided here via hooks. Default value is an empty array.
+    ///   - transferListeners: An array of `UploadObjectTransferListener`. The transfer status and progress of the operation will be published to each transfer listener provided here via hooks. Default value is an empty array.
     public init(
         putObjectInput: PutObjectInput,
-        transferListeners: [TransferListener] = []
+        transferListeners: [UploadObjectTransferListener] = []
     ) {
-        self.operationID = UUID().uuidString
+        self.id = UUID().uuidString
         self.putObjectInput = putObjectInput
         self.transferListeners = transferListeners
     }
@@ -35,11 +35,11 @@ public struct UploadObjectInput: TransferInput {
     // Internal initializer used by the `uploadDirectory` operation to provide specific operation IDs for
     //  "child" requests. Allows grouping requests together by the operation IDs.
     internal init(
-        operationID: String,
+        id: String,
         putObjectInput: PutObjectInput,
-        transferListeners: [TransferListener] = []
+        transferListeners: [UploadObjectTransferListener] = []
     ) {
-        self.operationID = operationID
+        self.id = id
         self.putObjectInput = putObjectInput
         self.transferListeners = transferListeners
     }
@@ -153,7 +153,7 @@ public struct UploadObjectInput: TransferInput {
     private func resolveChecksumAlgorithmForCreateMPUInput(
         _ putObjectInput: PutObjectInput
     ) -> S3ClientTypes.ChecksumAlgorithm {
-        // If algorithm was configurd on the `PutObjectInput`, just return that.
+        // If algorithm was configured on the `PutObjectInput`, just return that.
         if let algo = putObjectInput.checksumAlgorithm {
             return algo
         }

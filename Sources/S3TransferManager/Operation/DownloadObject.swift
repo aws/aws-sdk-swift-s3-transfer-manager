@@ -143,7 +143,8 @@ public extension S3TransferManager {
                 onTransferFailed(
                     input.transferListeners,
                     input,
-                    SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes)
+                    SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes),
+                    error
                 )
                 // `downloadObject` call finished with an error. Release the semaphore instance & bubble up the error.
                 await self.semaphoreManager.releaseSemaphoreInstance(forBucket: input.getObjectInput.bucket!)
@@ -526,6 +527,50 @@ public extension S3TransferManager {
             throw S3TMDownloadObjectError.failedToDetermineObjectSize
         }
         return size
+    }
+
+    // TransferListener helper functions for `downloadObject`.
+
+    private func onTransferInitiated(
+        _ listeners: [DownloadObjectTransferListener],
+        _ input: DownloadObjectInput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onTransferInitiated(input: input, snapshot: snapshot)
+        }
+    }
+
+    private func onBytesTransferred(
+        _ listeners: [DownloadObjectTransferListener],
+        _ input: DownloadObjectInput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onBytesTransferred(input: input, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferComplete(
+        _ listeners: [DownloadObjectTransferListener],
+        _ input: DownloadObjectInput,
+        _ output: DownloadObjectOutput,
+        _ snapshot: SingleObjectTransferProgressSnapshot
+    ) {
+        for listener in listeners {
+            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
+        }
+    }
+
+    private func onTransferFailed(
+        _ listeners: [DownloadObjectTransferListener],
+        _ input: DownloadObjectInput,
+        _ snapshot: SingleObjectTransferProgressSnapshot,
+        _ error: Error
+    ) {
+        for listener in listeners {
+            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
+        }
     }
 }
 
