@@ -6,7 +6,6 @@
 //
 
 import AWSS3
-import class Foundation.DispatchQueue
 import class Foundation.FileManager
 import class Foundation.OutputStream
 import struct Foundation.URL
@@ -28,10 +27,8 @@ public extension S3TransferManager {
                 DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )
             let s3 = config.s3Client
-            // Variables to store the results of `downloadObject` child tasks.
-            var successfulDownloadCount = 0, failedDownloadCount = 0
-            // Queue used to synchronize download count variable updates.
-            let queue = DispatchQueue(label: "DownloadCountQueue")
+            // Concurrency-safe storage for results of `downloadObject` child tasks.
+            let results = Results()
 
             do {
                 try validateOrCreateDestinationDirectory(input: input)
@@ -85,13 +82,9 @@ public extension S3TransferManager {
                     while let downloadObjectResult = try await group.next() {
                         switch downloadObjectResult {
                         case .success:
-                            queue.sync {
-                                successfulDownloadCount += 1
-                            }
+                            await results.incrementSuccess()
                         case .failure(let error):
-                            queue.sync {
-                                failedDownloadCount += 1
-                            }
+                            await results.incrementFail()
                             // Call failure policy closure to handle `downloadObject` failure.
                             // If this throws an error, all tasks within the throwing task group are cancelled automatically.
                             try await input.failurePolicy(error, input)
@@ -99,6 +92,7 @@ public extension S3TransferManager {
                     }
                 }
 
+                let (successfulDownloadCount, failedDownloadCount) = await results.getValues()
                 let downloadBucketOutput = DownloadBucketOutput(
                     objectsDownloaded: successfulDownloadCount,
                     objectsFailed: failedDownloadCount
@@ -114,6 +108,7 @@ public extension S3TransferManager {
                 )
                 return downloadBucketOutput
             } catch {
+                let (successfulDownloadCount, failedDownloadCount) = await results.getValues()
                 onTransferFailed(
                     input.directoryTransferListeners,
                     input,
@@ -148,6 +143,15 @@ public extension S3TransferManager {
         s3: S3Client,
         input: DownloadBucketInput
     ) async throws -> [S3ClientTypes.Object] {
+        defer {
+            Task {
+                await taskCompleted(bucketName)
+            }
+        }
+
+        let bucketName = input.bucket
+        await waitForPermission(bucketName)
+
         var objects: [S3ClientTypes.Object] = []
         let paginatorOutputs = s3.listObjectsV2Paginated(input: ListObjectsV2Input(
             bucket: input.bucket,

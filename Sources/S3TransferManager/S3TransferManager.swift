@@ -6,8 +6,6 @@
 //
 
 import AWSS3
-import class Foundation.DispatchQueue
-import class Foundation.DispatchSemaphore
 import struct Smithy.SwiftLogger
 
 /// The Amazon S3 Transfer Manager for Swift, S3TM for short.
@@ -26,14 +24,14 @@ import struct Smithy.SwiftLogger
 public class S3TransferManager {
     internal let config: S3TransferManagerConfig
     internal let logger: SwiftLogger
-    internal let semaphoreManager: S3TMSemaphoreManager
-    internal let concurrentTaskLimit: Int
+    internal let concurrencyManager: S3TMConcurrencyManager
+    internal let concurrentTaskLimitPerBucket: Int
 
     /// Initializes `S3TransferManager` with the default configuration.
     public init() async throws {
         self.config = try await S3TransferManagerConfig()
-        self.concurrentTaskLimit = config.s3ClientConfig.httpClientConfiguration.maxConnections
-        self.semaphoreManager = S3TMSemaphoreManager(concurrerntTaskLimit: concurrentTaskLimit)
+        self.concurrentTaskLimitPerBucket = config.s3ClientConfig.httpClientConfiguration.maxConnections
+        self.concurrencyManager = S3TMConcurrencyManager(concurrerntTaskLimitPerBucket: concurrentTaskLimitPerBucket)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 
@@ -45,25 +43,81 @@ public class S3TransferManager {
         config: S3TransferManagerConfig
     ) {
         self.config = config
-        self.concurrentTaskLimit = config.s3ClientConfig.httpClientConfiguration.maxConnections
-        self.semaphoreManager = S3TMSemaphoreManager(concurrerntTaskLimit: concurrentTaskLimit)
+        self.concurrentTaskLimitPerBucket = config.s3ClientConfig.httpClientConfiguration.maxConnections
+        self.concurrencyManager = S3TMConcurrencyManager(concurrerntTaskLimitPerBucket: concurrentTaskLimitPerBucket)
         logger = SwiftLogger(label: "S3TransferManager")
     }
+}
 
-    // MARK: - Miscellaneous helper functions.
+// MARK: - Collection of internal helper functions & actors.
+internal extension S3TransferManager {
+    // Helpers used by `uploadDirectory` & `downloadBucket`.
 
-    // Helper function used by `uploadDirectory` & `downloadBucket`.
-    internal func defaultPathSeparator() -> String {
+    func defaultPathSeparator() -> String {
         return "/" // Default path separator for all apple platforms & Linux distros.
     }
 
-    // Helper function that makes semaphore.wait() async.
-    internal func wait(_ semaphore: DispatchSemaphore) async {
+    actor Results {
+        private var fail: Int = 0
+        private var success: Int = 0
+
+        func incrementFail() {
+            fail += 1
+        }
+
+        func incrementSuccess() {
+            success += 1
+        }
+
+        func getValues() -> (success: Int, fail: Int) {
+            return (success, fail)
+        }
+    }
+
+    // Helpers used for concurrency mgmt.
+
+    func taskCompleted(_ bucketName: String) async {
+        await concurrencyManager.taskCompleted(forBucket: bucketName)
+    }
+
+    func addContinuation(_ bucketName: String, _ continuation: CheckedContinuation<Void, Never>) async {
+        await concurrencyManager.taskCompleted(forBucket: bucketName)
+    }
+
+    func waitForPermission(_ bucketName: String) async {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {  // Run on a separate GCD thread to prevent deadlock.
-                semaphore.wait()
-                continuation.resume()
+            Task {
+                await addContinuation(bucketName, continuation)
             }
+        }
+    }
+
+    // An actor used to keep track of number of transferred bytes in single object transfer operations.
+    actor ObjectTransferProgressTracker {
+        private(set) var transferredBytes = 0
+
+        // Adds newly transferred bytes & returns the new value.
+        func addBytes(_ bytes: Int) -> Int {
+            transferredBytes += bytes
+            return transferredBytes
+        }
+    }
+
+    // An actor used to keep track of task status' in `downloadObject`.
+    actor DownloadTaskCounter {
+        private(set) var started: Int = 0
+        private(set) var completed: Int = 0
+
+        var pendingCompletionSignal: Int {
+            return started - completed
+        }
+
+        func incrementStart() {
+            started += 1
+        }
+
+        func incrementCompletion() {
+            completed += 1
         }
     }
 }
