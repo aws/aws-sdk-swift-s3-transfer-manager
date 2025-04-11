@@ -81,7 +81,7 @@ internal extension S3TransferManager {
     }
 
     func addContinuation(_ bucketName: String, _ continuation: CheckedContinuation<Void, Never>) async {
-        await concurrencyManager.taskCompleted(forBucket: bucketName)
+        await concurrencyManager.addContinuation(forBucket: bucketName, continuation: continuation)
     }
 
     func waitForPermission(_ bucketName: String) async {
