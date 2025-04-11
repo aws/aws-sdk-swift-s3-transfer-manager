@@ -46,7 +46,8 @@ internal actor S3TMConcurrencyManager {
 
     private func startNextTask(forBucket bucketName: String) {
         // Remove entry from continuation dictionary if there's no continuation awaiting resume.
-        guard var continuationsForBucket = continuationsOnHoldPerBucket[bucketName], !continuationsForBucket.isEmpty else {
+        guard var continuationsForBucket = continuationsOnHoldPerBucket[bucketName],
+              !continuationsForBucket.isEmpty else {
             continuationsOnHoldPerBucket.removeValue(forKey: bucketName)
             return
         }

@@ -277,7 +277,9 @@ public extension S3TransferManager {
                         await self.waitForPermission(bucketName)
                         do {
                             try Task.checkCancellation()
-                            let partGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(partNumber: partNumber)
+                            let partGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(
+                                partNumber: partNumber
+                            )
                             let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
                             // await self.taskCompleted is NOT called in this do-block (only in the matching catch block).
                             // That's because connection is alive until everything is read from the body.
