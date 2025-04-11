@@ -56,6 +56,8 @@ internal actor S3TMConcurrencyManager {
         let currentRunningTaskCountForBucket = runningTaskCountPerBucket[bucketName] ?? 0
         if currentRunningTaskCountForBucket < concurrentTaskLimitPerBucket {
             let continuation = continuationsForBucket.removeFirst()
+            // Update the modified array in the dictionary.
+            continuationsOnHoldPerBucket[bucketName] = continuationsForBucket
             runningTaskCountPerBucket[bucketName] = currentRunningTaskCountForBucket + 1
             continuation.resume()
         }
