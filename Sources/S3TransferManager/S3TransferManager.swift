@@ -76,15 +76,15 @@ internal extension S3TransferManager {
 
     // Helpers used for concurrency mgmt.
 
-    func taskCompleted(_ bucketName: String) async {
+    private func taskCompleted(_ bucketName: String) async {
         await concurrencyManager.taskCompleted(forBucket: bucketName)
     }
 
-    func addContinuation(_ bucketName: String, _ continuation: CheckedContinuation<Void, Never>) async {
+    private func addContinuation(_ bucketName: String, _ continuation: CheckedContinuation<Void, Never>) async {
         await concurrencyManager.addContinuation(forBucket: bucketName, continuation: continuation)
     }
 
-    func waitForPermission(_ bucketName: String) async {
+    private func waitForPermission(_ bucketName: String) async {
         await withCheckedContinuation { continuation in
             Task {
                 await addContinuation(bucketName, continuation)
@@ -116,24 +116,6 @@ internal extension S3TransferManager {
         func addBytes(_ bytes: Int) -> Int {
             transferredBytes += bytes
             return transferredBytes
-        }
-    }
-
-    // An actor used to keep track of task status' in `downloadObject`.
-    actor DownloadTaskCounter {
-        private(set) var started: Int = 0
-        private(set) var completed: Int = 0
-
-        var pendingCompletionSignal: Int {
-            return started - completed
-        }
-
-        func incrementStart() {
-            started += 1
-        }
-
-        func incrementCompletion() {
-            completed += 1
         }
     }
 }

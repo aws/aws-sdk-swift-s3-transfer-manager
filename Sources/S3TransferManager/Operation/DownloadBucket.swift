@@ -143,27 +143,22 @@ public extension S3TransferManager {
         s3: S3Client,
         input: DownloadBucketInput
     ) async throws -> [S3ClientTypes.Object] {
-        defer {
-            Task {
-                await taskCompleted(bucketName)
-            }
-        }
-
         let bucketName = input.bucket
-        await waitForPermission(bucketName)
 
-        var objects: [S3ClientTypes.Object] = []
-        let paginatorOutputs = s3.listObjectsV2Paginated(input: ListObjectsV2Input(
-            bucket: input.bucket,
-            prefix: input.s3Prefix
-        ))
-        for try await output in paginatorOutputs {
-            guard let contents = output.contents else {
-                throw S3TMDownloadBucketError.FailedToRetrieveObjectsUsingListObjectsV2
+        return try await withBucketPermission(bucketName: bucketName) {
+            var objects: [S3ClientTypes.Object] = []
+            let paginatorOutputs = s3.listObjectsV2Paginated(input: ListObjectsV2Input(
+                bucket: input.bucket,
+                prefix: input.s3Prefix
+            ))
+            for try await output in paginatorOutputs {
+                guard let contents = output.contents else {
+                    throw S3TMDownloadBucketError.FailedToRetrieveObjectsUsingListObjectsV2
+                }
+                objects += contents
             }
-            objects += contents
+            return objects
         }
-        return objects
     }
 
     internal func getFileURLsResolvedFromObjectKeys(

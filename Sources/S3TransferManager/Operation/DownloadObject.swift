@@ -140,19 +140,18 @@ public extension S3TransferManager {
         _ downloadObjectInput: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker
     ) async throws -> GetObjectOutput {
-        defer {
-            Task {
-                await taskCompleted(bucketName)
-            }
-        }
         let bucketName = getObjectInput.bucket!
-        await waitForPermission(bucketName)
 
-        let getObjectOutput = try await s3.getObject(input: getObjectInput)
-        // Write returned data to user-provided output stream & return.
-        guard let outputData = try await getObjectOutput.body?.readData() else {
-            throw S3TMDownloadObjectError.failedToReadResponseBody
+        let (getObjectOutput, outputData) = try await withBucketPermission(bucketName: bucketName) {
+            try Task.checkCancellation()
+            let getObjectOutput = try await s3.getObject(input: getObjectInput)
+            // Write returned data to user-provided output stream & return.
+            guard let outputData = try await getObjectOutput.body?.readData() else {
+                throw S3TMDownloadObjectError.failedToReadResponseBody
+            }
+            return (getObjectOutput, outputData)
         }
+
         try await writeData(
             outputData,
             to: downloadObjectInput.outputStream,
@@ -258,36 +257,18 @@ public extension S3TransferManager {
                 // Each child task returns (part_number, stream) tuple.
                 of: (partNumber: Int, byteStream: ByteStream).self
             ) { group in
-                // Ensures taskCompleted() is called for all child tasks.
-                defer {
-                    Task {
-                        for _ in 0..<(await taskCounter.pendingCompletionSignal) {
-                            await self.taskCompleted(bucketName)
-                        }
-                    }
-                }
-
-                let taskCounter = DownloadTaskCounter()
                 let bucketName = input.getObjectInput.bucket!
 
                 // Add child task for each part GET in current batch.
                 for partNumber in currentBatchStart...currentBatchEnd {
                     group.addTask {
-                        await taskCounter.incrementStart()
-                        await self.waitForPermission(bucketName)
-                        do {
+                        return try await self.withBucketPermission(bucketName: bucketName) {
                             try Task.checkCancellation()
                             let partGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(
                                 partNumber: partNumber
                             )
                             let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
-                            // await self.taskCompleted is NOT called in this do-block (only in the matching catch block).
-                            // That's because connection is alive until everything is read from the body.
                             return (partNumber, partGetObjectOutput.body!)
-                        } catch {
-                            await self.taskCompleted(bucketName)
-                            await taskCounter.incrementCompletion()
-                            throw error
                         }
                     }
                 }
@@ -303,9 +284,6 @@ public extension S3TransferManager {
                             input,
                             progressTracker
                         )
-                        // Call taskCompleted() now that we read the entire part and connection is gonna get cleaned up.
-                        await taskCompleted(bucketName)
-                        await taskCounter.incrementCompletion()
                         // Discard stream after it's written to output stream.
                         buffer.removeValue(forKey: nextPartToProcess)
                         nextPartToProcess += 1
@@ -419,16 +397,6 @@ public extension S3TransferManager {
                 // Each child task returns (request_number, stream) tuple.
                 of: (Int, ByteStream).self
             ) { group in
-                // Ensures taskCompleted() is called for all child tasks.
-                defer {
-                    Task {
-                        for _ in 0..<(await taskCounter.pendingCompletionSignal) {
-                            await self.taskCompleted(bucketName)
-                        }
-                    }
-                }
-
-                let taskCounter = DownloadTaskCounter()
                 let bucketName = input.getObjectInput.bucket!
 
                 // Add child task for each range GET in current batch.
@@ -447,18 +415,10 @@ public extension S3TransferManager {
                     )
 
                     group.addTask {
-                        await taskCounter.incrementStart()
-                        await self.waitForPermission(bucketName)
-                        do {
+                        return try await self.withBucketPermission(bucketName: bucketName) {
                             try Task.checkCancellation()
                             let rangeGetObjectOutput = try await s3.getObject(input: rangeGetObjectInput)
-                            // await self.taskCompleted is NOT called in this do-block (only in matching catch block).
-                            // That's because connection is alive until everything is read from the body.
                             return (numRequest, rangeGetObjectOutput.body!)
-                        } catch {
-                            await self.taskCompleted(bucketName)
-                            await taskCounter.incrementCompletion()
-                            throw error
                         }
                     }
                 }
@@ -474,9 +434,6 @@ public extension S3TransferManager {
                             input,
                             progressTracker
                         )
-                        // Call taskCompleted() now that we read the entire part and connection is gonna get cleaned up.
-                        await taskCompleted(bucketName)
-                        await taskCounter.incrementCompletion()
                         // Discard stream after it's written to output stream.
                         buffer.removeValue(forKey: nextSegmentToProcess)
                         nextSegmentToProcess += 1
