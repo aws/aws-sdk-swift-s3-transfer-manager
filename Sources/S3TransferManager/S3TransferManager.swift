@@ -92,6 +92,22 @@ internal extension S3TransferManager {
         }
     }
 
+    func withBucketPermission<T>(
+        bucketName: String,
+        operation: () async throws -> T
+    ) async throws -> T {
+        await waitForPermission(bucketName)
+
+        do {
+            let result = try await operation()
+            await taskCompleted(bucketName)
+            return result
+        } catch {
+            await taskCompleted(bucketName)
+            throw error
+        }
+    }
+
     // An actor used to keep track of number of transferred bytes in single object transfer operations.
     actor ObjectTransferProgressTracker {
         private(set) var transferredBytes = 0

@@ -28,6 +28,7 @@ public extension S3TransferManager {
             var uploadID: String = ""
             var numParts: Int = -1
             var partSize: Int = -1
+            let bucketName = input.putObjectInput.bucket!
 
             do {
                 payloadSize = try await resolvePayloadSize(of: input.putObjectInput.body)
@@ -39,16 +40,11 @@ public extension S3TransferManager {
 
                 // If payload is below threshold, just do a single putObject.
                 if payloadSize < config.multipartUploadThresholdBytes {
-                    defer {
-                        Task {
-                            await taskCompleted(bucketName)
-                        }
+                    let bucketName = input.putObjectInput.bucket!
+                    let putObjectOutput = try await withBucketPermission(bucketName: bucketName) {
+                        try await s3.putObject(input: input.putObjectInput)
                     }
 
-                    let bucketName = input.putObjectInput.bucket!
-                    await waitForPermission(bucketName)
-
-                    let putObjectOutput = try await s3.putObject(input: input.putObjectInput)
                     let uploadObjectOutput = UploadObjectOutput(putObjectOutput: putObjectOutput)
                     onBytesTransferred(
                         input.transferListeners,
@@ -165,16 +161,9 @@ public extension S3TransferManager {
         payloadSize: Int,
         input: UploadObjectInput
     ) async throws -> (uploadID: String, numParts: Int, partSize: Int) {
-        defer {
-            Task {
-                await taskCompleted(bucketName)
-            }
-        }
-
         let bucketName = input.putObjectInput.bucket!
-        await waitForPermission(bucketName)
 
-        do {
+        return try await withBucketPermission(bucketName: bucketName) {
             // Determine part size. Division by 10,000 is bc MPU supports 10,000 parts maximum.
             let partSize = max(config.targetPartSizeBytes, payloadSize/10000)
             // Add 1 if there should be a last part smaller than regular part size.
@@ -188,15 +177,6 @@ public extension S3TransferManager {
                 throw S3TMUploadObjectError.failedToCreateMPU
             }
             return (uploadID, numParts, partSize)
-        } catch {
-            // Failure to create MPU = end of `uploadObject` operation.
-            onTransferFailed(
-                input.transferListeners,
-                input,
-                SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize),
-                error
-            )
-            throw error
         }
     }
 
@@ -222,51 +202,45 @@ public extension S3TransferManager {
                 do {
                     try Task.checkCancellation()
                     group.addTask {
-                        defer {
-                            Task {
-                                await self.taskCompleted(bucketName)
-                            }
+                        return try await self.withBucketPermission(bucketName: bucketName) {
+                            try Task.checkCancellation()
+                            let partData = try await {
+                                let partOffset = (partNumber - 1) * partSize
+                                // Either take full part size or remainder (only for the last part).
+                                let resolvedPartSize = min(partSize, payloadSize - partOffset)
+                                return try await self.readPartData(
+                                    input: input,
+                                    partSize: resolvedPartSize,
+                                    partOffset: partOffset,
+                                    byteStreamPartReader: byteStreamPartReader
+                                )
+                            }()
+
+                            let uploadPartInput = input.getUploadPartInput(
+                                body: ByteStream.data(partData),
+                                partNumber: partNumber,
+                                uploadID: uploadID
+                            )
+                            let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
+
+                            let transferredBytes = await progressTracker.addBytes(partData.count)
+                            self.onBytesTransferred(
+                                input.transferListeners,
+                                input,
+                                SingleObjectTransferProgressSnapshot(
+                                    transferredBytes: transferredBytes,
+                                    totalBytes: payloadSize
+                                )
+                            )
+                            return S3ClientTypes.CompletedPart(
+                                checksumCRC32: uploadPartOutput.checksumCRC32,
+                                checksumCRC32C: uploadPartOutput.checksumCRC32C,
+                                checksumSHA1: uploadPartOutput.checksumSHA1,
+                                checksumSHA256: uploadPartOutput.checksumSHA256,
+                                eTag: uploadPartOutput.eTag,
+                                partNumber: partNumber
+                            )
                         }
-
-                        await self.waitForPermission(bucketName)
-                        try Task.checkCancellation()
-
-                        let partData = try await {
-                            let partOffset = (partNumber - 1) * partSize
-                            // Either take full part size or remainder (only for the last part).
-                            let resolvedPartSize = min(partSize, payloadSize - partOffset)
-                            return try await self.readPartData(
-                                input: input,
-                                partSize: resolvedPartSize,
-                                partOffset: partOffset,
-                                byteStreamPartReader: byteStreamPartReader
-                            )
-                        }()
-
-                        let uploadPartInput = input.getUploadPartInput(
-                            body: ByteStream.data(partData),
-                            partNumber: partNumber,
-                            uploadID: uploadID
-                        )
-                        let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
-
-                        let transferredBytes = await progressTracker.addBytes(partData.count)
-                        self.onBytesTransferred(
-                            input.transferListeners,
-                            input,
-                            SingleObjectTransferProgressSnapshot(
-                                transferredBytes: transferredBytes,
-                                totalBytes: payloadSize
-                            )
-                        )
-                        return S3ClientTypes.CompletedPart(
-                            checksumCRC32: uploadPartOutput.checksumCRC32,
-                            checksumCRC32C: uploadPartOutput.checksumCRC32C,
-                            checksumSHA1: uploadPartOutput.checksumSHA1,
-                            checksumSHA256: uploadPartOutput.checksumSHA256,
-                            eTag: uploadPartOutput.eTag,
-                            partNumber: partNumber
-                        )
                     }
                 } catch {
                     // This is only reached if task was cancelled.
@@ -309,22 +283,17 @@ public extension S3TransferManager {
         completedParts: [S3ClientTypes.CompletedPart],
         payloadSize: Int
     ) async throws -> CompleteMultipartUploadOutput {
-        defer {
-            Task {
-                await taskCompleted(bucketName)
-            }
-        }
         let bucketName = input.putObjectInput.bucket!
-        await waitForPermission(bucketName)
 
         let completeMPUInput = input.getCompleteMultipartUploadInput(
             multipartUpload: S3ClientTypes.CompletedMultipartUpload(parts: completedParts),
             uploadID: uploadID,
             mpuObjectSize: payloadSize
         )
-        let completeMPUOutput = try await s3.completeMultipartUpload(input: completeMPUInput)
-        // MPU completed successfully; it's the end of the `uploadObject` operation.
-        return completeMPUOutput
+
+        return try await withBucketPermission(bucketName: bucketName) {
+            return try await s3.completeMultipartUpload(input: completeMPUInput)
+        }
     }
 
     private func abortMPU(
@@ -333,16 +302,11 @@ public extension S3TransferManager {
         uploadID: String,
         originalError: Error
     ) async throws {
-        defer {
-            Task {
-                await taskCompleted(bucketName)
-            }
-        }
         let bucketName = input.putObjectInput.bucket!
-        await waitForPermission(bucketName)
 
-        _ = try await s3.abortMultipartUpload(input: input.getAbortMultipartUploadInput(uploadID: uploadID))
-        // MPU aborted successfully; it's the end of the `uploadObject` operation.
+        try await withBucketPermission(bucketName: bucketName) {
+            _ = try await s3.abortMultipartUpload(input: input.getAbortMultipartUploadInput(uploadID: uploadID))
+        }
     }
 
     // TransferListener helper functions for `uploadObject`.
