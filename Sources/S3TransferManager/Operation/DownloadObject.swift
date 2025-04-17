@@ -242,25 +242,23 @@ public extension S3TransferManager {
         totalParts: Int,
         progressTracker: ObjectTransferProgressTracker
     ) async throws {
+        let bucketName = input.getObjectInput.bucket!
         // Size of batch is same as the task limit per bucket.
         let batchSize = concurrentTaskLimitPerBucket
-        // Starting part number.
-        var currentBatchStart = 2
 
-        // Loop until all parts are retrieved and processed in batches.
-        while currentBatchStart <= totalParts {
+        // Process all parts in batches.
+        for batchStart in stride(from: 2, to: totalParts + 1, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize - 1, totalParts)
+
             // Temporary buffer used to ensure correct ordering of data when writing to the output stream.
             var buffer = [Int: ByteStream]()
 
-            let currentBatchEnd = min(currentBatchStart + batchSize - 1, totalParts)
             try await withThrowingTaskGroup(
                 // Each child task returns (part_number, stream) tuple.
                 of: (partNumber: Int, byteStream: ByteStream).self
             ) { group in
-                let bucketName = input.getObjectInput.bucket!
-
                 // Add child task for each part GET in current batch.
-                for partNumber in currentBatchStart...currentBatchEnd {
+                for partNumber in batchStart...batchEnd {
                     group.addTask {
                         return try await self.withBucketPermission(bucketName: bucketName) {
                             try Task.checkCancellation()
@@ -274,7 +272,7 @@ public extension S3TransferManager {
                 }
 
                 // Write results of part GETs in current batch to `input.outputStream` in order.
-                var nextPartToProcess = currentBatchStart
+                var nextPartToProcess = batchStart
                 for try await (partNumber, body) in group {
                     buffer[partNumber] = body
                     while let body = buffer[nextPartToProcess] {
@@ -290,8 +288,6 @@ public extension S3TransferManager {
                     }
                 }
             }
-            // Update batch start to next batch start.
-            currentBatchStart = currentBatchEnd + 1
         }
     }
 
@@ -383,24 +379,22 @@ public extension S3TransferManager {
         let numRequests = (objectSize / config.targetPartSizeBytes)
         - (objectSize % config.targetPartSizeBytes == 0 ? 1 : 0)
 
+        let bucketName = input.getObjectInput.bucket!
         // Size of batch is same as the task limit per bucket.
         let batchSize = concurrentTaskLimitPerBucket
-        var currentBatchStart = 0
 
-        // Loop until all segments are retrieved and processed in batches.
-        while currentBatchStart < numRequests {
+        for batchStart in stride(from: 0, to: numRequests, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize - 1, numRequests - 1)
+
             // Temporary buffer used to ensure correct ordering of data when writing to the output stream.
             var buffer = [Int: ByteStream]()
 
-            let currentBatchEnd = min(currentBatchStart + batchSize - 1, numRequests - 1)
             try await withThrowingTaskGroup(
                 // Each child task returns (request_number, stream) tuple.
                 of: (Int, ByteStream).self
             ) { group in
-                let bucketName = input.getObjectInput.bucket!
-
                 // Add child task for each range GET in current batch.
-                for numRequest in currentBatchStart...currentBatchEnd {
+                for numRequest in batchStart...batchEnd {
                     let subRangeStart = startByte + (numRequest * config.targetPartSizeBytes)
                     // End byte is inclusive, so must subtract 1 to get target amount.
                     // We don't have to worry about the case where `subRangeEnd` exceeds object size for
@@ -424,7 +418,7 @@ public extension S3TransferManager {
                 }
 
                 // Write results of range GETs in current batch to `input.outputStream` in order.
-                var nextSegmentToProcess = currentBatchStart
+                var nextSegmentToProcess = batchStart
                 for try await (numRequest, body) in group {
                     buffer[numRequest] = body
                     while let body = buffer[nextSegmentToProcess] {
@@ -440,8 +434,6 @@ public extension S3TransferManager {
                     }
                 }
             }
-            // Update batch start to next batch start.
-            currentBatchStart = currentBatchEnd + 1
         }
     }
 
