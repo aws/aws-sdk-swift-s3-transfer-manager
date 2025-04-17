@@ -28,7 +28,6 @@ public extension S3TransferManager {
             var uploadID: String = ""
             var numParts: Int = -1
             var partSize: Int = -1
-            let bucketName = input.putObjectInput.bucket!
 
             do {
                 payloadSize = try await resolvePayloadSize(of: input.putObjectInput.body)
@@ -190,16 +189,24 @@ public extension S3TransferManager {
         payloadSize: Int,
         progressTracker: ObjectTransferProgressTracker
     ) async throws -> [S3ClientTypes.CompletedPart] {
-        return try await withThrowingTaskGroup(
-            // Child task returns a completed part that contains S3's checksum & part number.
-            of: S3ClientTypes.CompletedPart.self,
-            // Task group returns completed parts sorted by the part number.
-            returning: [S3ClientTypes.CompletedPart].self
-        ) { group in
-            let bucketName = input.putObjectInput.bucket!
-            let byteStreamPartReader = ByteStreamPartReader(stream: input.putObjectInput.body!)
-            for partNumber in 1...numParts {
-                do {
+        var allCompletedParts: [S3ClientTypes.CompletedPart] = []
+        let batchSize = concurrentTaskLimitPerBucket
+        let byteStreamPartReader = ByteStreamPartReader(stream: input.putObjectInput.body!)
+        let bucketName = input.putObjectInput.bucket!
+
+        // Process parts in batches.
+        // Loop to numParts + 1; handles edgecase when last part is start to a new batch.
+        for batchStart in stride(from: 1, to: numParts + 1, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize - 1, numParts)
+
+            // Process each batch with its own TaskGroup.
+            let batchCompletedParts = try await withThrowingTaskGroup(
+                // Child task returns a completed part that contains S3's checksum & part number.
+                of: S3ClientTypes.CompletedPart.self,
+                // Task group returns completed parts in the batch.
+                returning: [S3ClientTypes.CompletedPart].self
+            ) { group in
+                for partNumber in batchStart...batchEnd {
                     try Task.checkCancellation()
                     group.addTask {
                         return try await self.withBucketPermission(bucketName: bucketName) {
@@ -242,19 +249,22 @@ public extension S3TransferManager {
                             )
                         }
                     }
-                } catch {
-                    // This is only reached if task was cancelled.
-                    throw error
                 }
+
+                // Collect the results from this batch.
+                var batchResults: [S3ClientTypes.CompletedPart] = []
+                for try await part in group {
+                    batchResults.append(part)
+                }
+                return batchResults
             }
 
-            var completedParts: [S3ClientTypes.CompletedPart] = []
-            for try await part in group {
-                completedParts.append(part)
-            }
-            completedParts.sort { $0.partNumber! < $1.partNumber! }
-            return completedParts
+            // Add this batch's results to our overall collection.
+            allCompletedParts.append(contentsOf: batchCompletedParts)
         }
+
+        // Sort all parts by part number before returning.
+        return allCompletedParts.sorted { $0.partNumber! < $1.partNumber! }
     }
 
     internal func readPartData(
