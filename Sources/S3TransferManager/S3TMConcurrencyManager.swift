@@ -9,57 +9,85 @@ internal actor S3TMConcurrencyManager {
     // This value comes from the S3 client config's `httpClientConfiguration.maxConnections`.
     internal let concurrentTaskLimitPerBucket: Int
 
-    // A dictionary that maps bucket names to a list of continuations, one continuation for each task.
-    private var continuationsOnHoldPerBucket: [String: [CheckedContinuation<Void, Never>]] = [:]
-    // A dictionary that maps bucket names to the current number of active tasks for that bucket.
-    private var runningTaskCountPerBucket: [String: Int] = [:]
+    // A dictionary that maps bucket names to theier respective queue objects.
+    private var bucketQueues: [String: BucketQueue] = [:]
 
     internal init(concurrerntTaskLimitPerBucket: Int) {
         self.concurrentTaskLimitPerBucket = concurrerntTaskLimitPerBucket
     }
 
-    internal func addContinuation(forBucket bucketName: String, continuation: CheckedContinuation<Void, Never>) {
-        // Add new continuation to the waiting list of continuations for the bucket.
-        if continuationsOnHoldPerBucket[bucketName] == nil {
-            continuationsOnHoldPerBucket[bucketName] = []
+    // Gets or creates a new BucketQueue for the specified bucket name.
+    private func getQueue(forBucket bucketName: String) -> BucketQueue {
+        if let existingQueue = bucketQueues[bucketName] {
+            return existingQueue
+        } else {
+            let newBucketQueue = BucketQueue()
+            bucketQueues[bucketName] = newBucketQueue
+            return newBucketQueue
         }
-        continuationsOnHoldPerBucket[bucketName]?.append(continuation)
+    }
 
-        // This resumes next-up continuation for the bucket if possible.
+    internal func addContinuation(forBucket bucketName: String, continuation: CheckedContinuation<Void, Never>) {
+        let queue = getQueue(forBucket: bucketName)
+        queue.addWaitingTask(continuation)
         startNextTask(forBucket: bucketName)
     }
 
-    internal func taskCompleted(forBucket bucketName: String) async {
-        // Decrement running task count for the bucket.
-        if let currentRunningCount = runningTaskCountPerBucket[bucketName], currentRunningCount > 0 {
-            runningTaskCountPerBucket[bucketName] = currentRunningCount - 1
+    internal func taskCompleted(forBucket bucketName: String) {
+        guard let queue = bucketQueues[bucketName] else { return }
+        // Free up task count.
+        queue.decrementActiveTaskCount()
+        if queue.isInactive {
+            // Remove queue if it's inactive.
+            bucketQueues.removeValue(forKey: bucketName)
+        } else {
+            // Start next awaiting task if available.
+            startNextTask(forBucket: bucketName)
         }
-
-        // Remove count entry from running task count dictionary if there's no running task for the bucket.
-        if runningTaskCountPerBucket[bucketName] == 0 {
-            runningTaskCountPerBucket.removeValue(forKey: bucketName)
-        }
-
-        // This resumes next-up continuation for the bucket if possible.
-        startNextTask(forBucket: bucketName)
     }
 
     private func startNextTask(forBucket bucketName: String) {
-        // Remove entry from continuation dictionary if there's no continuation awaiting resume.
-        guard var continuationsForBucket = continuationsOnHoldPerBucket[bucketName],
-              !continuationsForBucket.isEmpty else {
-            continuationsOnHoldPerBucket.removeValue(forKey: bucketName)
-            return
-        }
+        let queue = getQueue(forBucket: bucketName)
+        // Return if there's no awaiting task.
+        guard queue.hasWaitingTasks else { return }
 
-        // Resume next-up continuation for the bucket if there's room.
-        let currentRunningTaskCountForBucket = runningTaskCountPerBucket[bucketName] ?? 0
-        if currentRunningTaskCountForBucket < concurrentTaskLimitPerBucket {
-            let continuation = continuationsForBucket.removeFirst()
-            // Update the modified array in the dictionary.
-            continuationsOnHoldPerBucket[bucketName] = continuationsForBucket
-            runningTaskCountPerBucket[bucketName] = currentRunningTaskCountForBucket + 1
-            continuation.resume()
+        // Resume next awaiting task if concurrency limit isn't reached yet.
+        if queue.activeTaskCount < concurrentTaskLimitPerBucket {
+            if let nextTask = queue.getNextWaitingTask() {
+                queue.incrementActiveTaskCount()
+                nextTask.resume()
+            }
         }
+    }
+}
+
+private class BucketQueue {
+    // Queue of tasks awaiting execution.
+    private(set) var waitingTasks: [CheckedContinuation<Void, Never>] = []
+    // Count of number of active tasks running against the bucket.
+    private(set) var activeTaskCount: Int = 0
+
+    internal var hasWaitingTasks: Bool {
+        return !waitingTasks.isEmpty
+    }
+    internal var isInactive: Bool { // True if there's neither active nor waiting tasks.
+        return activeTaskCount == 0 && waitingTasks.isEmpty
+    }
+
+    internal func addWaitingTask(_ continuation: CheckedContinuation<Void, Never>) {
+        waitingTasks.append(continuation)
+    }
+
+    internal func getNextWaitingTask() -> CheckedContinuation<Void, Never>? {
+        guard !waitingTasks.isEmpty else { return nil }
+        return waitingTasks.removeFirst()
+    }
+
+    internal func incrementActiveTaskCount() {
+        activeTaskCount += 1
+    }
+
+    internal func decrementActiveTaskCount() {
+        activeTaskCount = max(0, activeTaskCount - 1)
     }
 }
