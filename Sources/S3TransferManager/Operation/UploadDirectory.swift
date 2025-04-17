@@ -6,7 +6,6 @@
 //
 
 import AWSS3
-import class Foundation.DispatchQueue
 import class Foundation.FileHandle
 import class Foundation.FileManager
 import class SmithyStreams.FileStream
@@ -30,10 +29,8 @@ public extension S3TransferManager {
                 DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )
 
-            // Variables to store the results of `uploadObject` child tasks.
-            var successfulUploadCount = 0, failedUploadCount = 0
-            // Queue used to synchronize upload count variable updates.
-            let queue = DispatchQueue(label: "UploadCountQueue")
+            // Concurrency-safe storage for results of `uploadObject` child tasks.
+            let results = Results()
 
             do {
                 let nestedFileURLs = try getNestedFileURLs(
@@ -76,13 +73,9 @@ public extension S3TransferManager {
                     while let uploadObjectResult = try await group.next() {
                         switch uploadObjectResult {
                         case .success:
-                            queue.sync {
-                                successfulUploadCount += 1
-                            }
+                            await results.incrementSuccess()
                         case .failure(let error):
-                            queue.sync {
-                                failedUploadCount += 1
-                            }
+                            await results.incrementFail()
                             // Call failure policy closure to handle `uploadObject` failure.
                             // If this throws an error, all tasks within the throwing task group are cancelled automatically.
                             try await input.failurePolicy(error, input)
@@ -90,6 +83,7 @@ public extension S3TransferManager {
                     }
                 }
 
+                let (successfulUploadCount, failedUploadCount) = await results.getValues()
                 let uploadDirectoryOutput = UploadDirectoryOutput(
                     objectsUploaded: successfulUploadCount,
                     objectsFailed: failedUploadCount
@@ -105,6 +99,7 @@ public extension S3TransferManager {
                 )
                 return uploadDirectoryOutput
             } catch {
+                let (successfulUploadCount, failedUploadCount) = await results.getValues()
                 onTransferFailed(
                     input.directoryTransferListeners,
                     input,

@@ -12,7 +12,7 @@ import XCTest
 
 class DownloadObjectUnitTests: S3TMUnitTestCase {
     let dummyInput = DownloadObjectInput(outputStream: OutputStream(toMemory: ()), getObjectInput: GetObjectInput())
-    let dummyProgressTracker = DownloadProgressTracker()
+    let dummyProgressTracker = S3TransferManager.ObjectTransferProgressTracker()
 
     // MARK: - writeData tests.
 
