@@ -76,20 +76,8 @@ internal extension S3TransferManager {
 
     // Helpers used for concurrency mgmt.
 
-    private func taskCompleted(_ bucketName: String) async {
-        await concurrencyManager.taskCompleted(forBucket: bucketName)
-    }
-
-    private func addContinuation(_ bucketName: String, _ continuation: CheckedContinuation<Void, Never>) async {
-        await concurrencyManager.addContinuation(forBucket: bucketName, continuation: continuation)
-    }
-
     private func waitForPermission(_ bucketName: String) async {
-        await withCheckedContinuation { continuation in
-            Task {
-                await addContinuation(bucketName, continuation)
-            }
-        }
+        await concurrencyManager.waitForPermission(bucketName: bucketName)
     }
 
     func withBucketPermission<T>(
@@ -100,10 +88,10 @@ internal extension S3TransferManager {
 
         do {
             let result = try await operation()
-            await taskCompleted(bucketName)
+            await concurrencyManager.taskCompleted(forBucket: bucketName)
             return result
         } catch {
-            await taskCompleted(bucketName)
+            await concurrencyManager.taskCompleted(forBucket: bucketName)
             throw error
         }
     }
