@@ -110,7 +110,7 @@ internal extension S3TransferManager {
 
     // An actor used to keep track of number of transferred bytes in single object transfer operations.
     actor ObjectTransferProgressTracker {
-        private(set) var transferredBytes = 0
+        var transferredBytes = 0
 
         // Adds newly transferred bytes & returns the new value.
         func addBytes(_ bytes: Int) -> Int {

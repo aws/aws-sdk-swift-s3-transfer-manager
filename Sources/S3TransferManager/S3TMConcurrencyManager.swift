@@ -44,10 +44,10 @@ internal actor S3TMConcurrencyManager {
 
 private actor BucketQueue {
     // Queue of continuations awaiting resume.
-    private(set) var waitingContinuations: [CheckedContinuation<Void, Never>] = []
+    var waitingContinuations: [CheckedContinuation<Void, Never>] = []
 
     // Count of number of active tasks running against the bucket.
-    private(set) var activeTaskCount: Int = 0
+    var activeTaskCount: Int = 0
     // The maximum number of concurrent tasks allowed for the bucket.
     private let concurrentTaskLimit: Int
 
