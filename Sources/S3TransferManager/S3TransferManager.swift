@@ -74,17 +74,13 @@ internal extension S3TransferManager {
         }
     }
 
-    // Helpers used for concurrency mgmt.
-
-    private func waitForPermission(_ bucketName: String) async {
-        await concurrencyManager.waitForPermission(bucketName: bucketName)
-    }
+    // Helper used for concurrency mgmt.
 
     func withBucketPermission<T>(
         bucketName: String,
         operation: () async throws -> T
     ) async throws -> T {
-        await waitForPermission(bucketName)
+        await concurrencyManager.waitForPermission(bucketName: bucketName)
 
         do {
             let result = try await operation()
