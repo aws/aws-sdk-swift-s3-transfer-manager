@@ -27,11 +27,6 @@ internal actor S3TMConcurrencyManager {
         }
     }
 
-    internal func addContinuation(forBucket bucketName: String, continuation: CheckedContinuation<Void, Never>) async {
-        let queue = getQueue(forBucket: bucketName)
-        await queue.addContinuation(continuation)
-    }
-
     internal func taskCompleted(forBucket bucketName: String) async {
         guard let queue = bucketQueues[bucketName] else { return }
         let isInactive = await queue.taskCompleted()
@@ -39,6 +34,11 @@ internal actor S3TMConcurrencyManager {
             // Remove queue if it's inactive.
             bucketQueues.removeValue(forKey: bucketName)
         }
+    }
+
+    internal func waitForPermission(bucketName: String) async {
+        let queue = getQueue(forBucket: bucketName)
+        await queue.waitForPermission()
     }
 }
 
@@ -63,7 +63,7 @@ private actor BucketQueue {
         return activeTaskCount == 0 && waitingContinuations.isEmpty
     }
 
-    internal func addContinuation(_ continuation: CheckedContinuation<Void, Never>) {
+    private func addContinuation(_ continuation: CheckedContinuation<Void, Never>) {
         waitingContinuations.append(continuation)
         resumeNextContinuationIfPossible()
     }
@@ -77,6 +77,12 @@ private actor BucketQueue {
         )
         resumeNextContinuationIfPossible()
         return isInactive
+    }
+
+    internal func waitForPermission() async {
+        await withCheckedContinuation { continuation in
+            addContinuation(continuation)
+        }
     }
 
     private func resumeNextContinuationIfPossible() {
