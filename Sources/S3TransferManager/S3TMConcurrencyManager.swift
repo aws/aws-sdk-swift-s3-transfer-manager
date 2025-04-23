@@ -5,15 +5,20 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+import struct Smithy.SwiftLogger
+
 internal actor S3TMConcurrencyManager {
     // This value comes from the S3 client config's `httpClientConfiguration.maxConnections`.
     internal let concurrentTaskLimitPerBucket: Int
 
-    // A dictionary that maps bucket names to theier respective queue objects.
+    // A dictionary that maps bucket names to their respective queue objects.
     private var bucketQueues: [String: BucketQueue] = [:]
 
-    internal init(concurrerntTaskLimitPerBucket: Int) {
-        self.concurrentTaskLimitPerBucket = concurrerntTaskLimitPerBucket
+    private let logger: SwiftLogger
+
+    internal init(concurrentTaskLimitPerBucket: Int) {
+        self.concurrentTaskLimitPerBucket = concurrentTaskLimitPerBucket
+        self.logger = SwiftLogger(label: "S3TMConcurrencyManager")
     }
 
     // Gets or creates a new BucketQueue for the specified bucket name.
@@ -21,73 +26,86 @@ internal actor S3TMConcurrencyManager {
         if let existingQueue = bucketQueues[bucketName] {
             return existingQueue
         } else {
-            let newBucketQueue = BucketQueue()
+            let newBucketQueue = BucketQueue(
+                concurrentTaskLimit: concurrentTaskLimitPerBucket,
+                logger: logger
+            )
             bucketQueues[bucketName] = newBucketQueue
             return newBucketQueue
         }
     }
 
-    internal func addContinuation(forBucket bucketName: String, continuation: CheckedContinuation<Void, Never>) {
-        let queue = getQueue(forBucket: bucketName)
-        queue.addWaitingTask(continuation)
-        startNextTask(forBucket: bucketName)
-    }
-
-    internal func taskCompleted(forBucket bucketName: String) {
+    internal func taskCompleted(forBucket bucketName: String) async {
         guard let queue = bucketQueues[bucketName] else { return }
-        // Free up task count.
-        queue.decrementActiveTaskCount()
-        if queue.isInactive {
+        await queue.taskCompleted()
+        if await queue.isInactive {
             // Remove queue if it's inactive.
             bucketQueues.removeValue(forKey: bucketName)
-        } else {
-            // Start next awaiting task if available.
-            startNextTask(forBucket: bucketName)
         }
     }
 
-    private func startNextTask(forBucket bucketName: String) {
+    internal func waitForPermission(bucketName: String) async {
         let queue = getQueue(forBucket: bucketName)
-        // Return if there's no awaiting task.
-        guard queue.hasWaitingTasks else { return }
-
-        // Resume next awaiting task if concurrency limit isn't reached yet.
-        if queue.activeTaskCount < concurrentTaskLimitPerBucket {
-            if let nextTask = queue.getNextWaitingTask() {
-                queue.incrementActiveTaskCount()
-                nextTask.resume()
-            }
-        }
+        await queue.waitForPermission()
     }
 }
 
-private class BucketQueue {
-    // Queue of tasks awaiting execution.
-    private(set) var waitingTasks: [CheckedContinuation<Void, Never>] = []
+private actor BucketQueue {
+    // Queue of continuations awaiting resume.
+    var waitingContinuations: [CheckedContinuation<Void, Never>] = []
+
     // Count of number of active tasks running against the bucket.
-    private(set) var activeTaskCount: Int = 0
+    var activeTaskCount: Int = 0
+    // The maximum number of concurrent tasks allowed for the bucket.
+    private let concurrentTaskLimit: Int
 
-    internal var hasWaitingTasks: Bool {
-        return !waitingTasks.isEmpty
-    }
-    internal var isInactive: Bool { // True if there's neither active nor waiting tasks.
-        return activeTaskCount == 0 && waitingTasks.isEmpty
-    }
+    private let logger: SwiftLogger
 
-    internal func addWaitingTask(_ continuation: CheckedContinuation<Void, Never>) {
-        waitingTasks.append(continuation)
+    internal init(concurrentTaskLimit: Int, logger: SwiftLogger) {
+        self.concurrentTaskLimit = concurrentTaskLimit
+        self.logger = logger
     }
 
-    internal func getNextWaitingTask() -> CheckedContinuation<Void, Never>? {
-        guard !waitingTasks.isEmpty else { return nil }
-        return waitingTasks.removeFirst()
+    internal var hasWaitingContinuations: Bool {
+        return !waitingContinuations.isEmpty
     }
 
-    internal func incrementActiveTaskCount() {
+    internal var isInactive: Bool { // True if there's neither active tasks nor waiting continuations.
+        return activeTaskCount == 0 && waitingContinuations.isEmpty
+    }
+
+    private func addContinuation(_ continuation: CheckedContinuation<Void, Never>) {
+        waitingContinuations.append(continuation)
+        tryResumeNextContinuation()
+    }
+
+    internal func taskCompleted() {
+        activeTaskCount -= 1
+        assert(
+            activeTaskCount > -1,
+            "Running continuation count went below zero. "
+            + "This should never happen."
+        )
+        tryResumeNextContinuation()
+    }
+
+    internal func waitForPermission() async {
+        await withCheckedContinuation { continuation in
+            addContinuation(continuation)
+        }
+    }
+
+    private func tryResumeNextContinuation() {
+        guard hasWaitingContinuations, activeTaskCount < concurrentTaskLimit else {
+            logger.debug(
+                "Unable to resume next continuation yet. "
+                + "activeTaskCount: \(activeTaskCount) & hasWaitingContinuations: \(hasWaitingContinuations)."
+            )
+            return
+        }
+
+        let nextContinuation = waitingContinuations.removeFirst()
         activeTaskCount += 1
-    }
-
-    internal func decrementActiveTaskCount() {
-        activeTaskCount = max(0, activeTaskCount - 1)
+        nextContinuation.resume()
     }
 }

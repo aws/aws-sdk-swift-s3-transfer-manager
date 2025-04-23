@@ -31,7 +31,7 @@ public class S3TransferManager {
     public init() async throws {
         self.config = try await S3TransferManagerConfig()
         self.concurrentTaskLimitPerBucket = config.s3ClientConfig.httpClientConfiguration.maxConnections
-        self.concurrencyManager = S3TMConcurrencyManager(concurrerntTaskLimitPerBucket: concurrentTaskLimitPerBucket)
+        self.concurrencyManager = S3TMConcurrencyManager(concurrentTaskLimitPerBucket: concurrentTaskLimitPerBucket)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 
@@ -44,7 +44,7 @@ public class S3TransferManager {
     ) {
         self.config = config
         self.concurrentTaskLimitPerBucket = config.s3ClientConfig.httpClientConfiguration.maxConnections
-        self.concurrencyManager = S3TMConcurrencyManager(concurrerntTaskLimitPerBucket: concurrentTaskLimitPerBucket)
+        self.concurrencyManager = S3TMConcurrencyManager(concurrentTaskLimitPerBucket: concurrentTaskLimitPerBucket)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 }
@@ -74,43 +74,27 @@ internal extension S3TransferManager {
         }
     }
 
-    // Helpers used for concurrency mgmt.
-
-    private func taskCompleted(_ bucketName: String) async {
-        await concurrencyManager.taskCompleted(forBucket: bucketName)
-    }
-
-    private func addContinuation(_ bucketName: String, _ continuation: CheckedContinuation<Void, Never>) async {
-        await concurrencyManager.addContinuation(forBucket: bucketName, continuation: continuation)
-    }
-
-    private func waitForPermission(_ bucketName: String) async {
-        await withCheckedContinuation { continuation in
-            Task {
-                await addContinuation(bucketName, continuation)
-            }
-        }
-    }
+    // Helper used for concurrency mgmt.
 
     func withBucketPermission<T>(
         bucketName: String,
         operation: () async throws -> T
     ) async throws -> T {
-        await waitForPermission(bucketName)
+        await concurrencyManager.waitForPermission(bucketName: bucketName)
 
         do {
             let result = try await operation()
-            await taskCompleted(bucketName)
+            await concurrencyManager.taskCompleted(forBucket: bucketName)
             return result
         } catch {
-            await taskCompleted(bucketName)
+            await concurrencyManager.taskCompleted(forBucket: bucketName)
             throw error
         }
     }
 
     // An actor used to keep track of number of transferred bytes in single object transfer operations.
     actor ObjectTransferProgressTracker {
-        private(set) var transferredBytes = 0
+        var transferredBytes = 0
 
         // Adds newly transferred bytes & returns the new value.
         func addBytes(_ bytes: Int) -> Int {
