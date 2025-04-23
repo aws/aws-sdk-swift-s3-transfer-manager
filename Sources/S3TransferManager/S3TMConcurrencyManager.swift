@@ -5,15 +5,20 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+import struct Smithy.SwiftLogger
+
 internal actor S3TMConcurrencyManager {
     // This value comes from the S3 client config's `httpClientConfiguration.maxConnections`.
     internal let concurrentTaskLimitPerBucket: Int
 
-    // A dictionary that maps bucket names to theier respective queue objects.
+    // A dictionary that maps bucket names to their respective queue objects.
     private var bucketQueues: [String: BucketQueue] = [:]
+
+    private let logger: SwiftLogger
 
     internal init(concurrentTaskLimitPerBucket: Int) {
         self.concurrentTaskLimitPerBucket = concurrentTaskLimitPerBucket
+        self.logger = SwiftLogger(label: "S3TMConcurrencyManager")
     }
 
     // Gets or creates a new BucketQueue for the specified bucket name.
@@ -21,7 +26,10 @@ internal actor S3TMConcurrencyManager {
         if let existingQueue = bucketQueues[bucketName] {
             return existingQueue
         } else {
-            let newBucketQueue = BucketQueue(concurrentTaskLimit: concurrentTaskLimitPerBucket)
+            let newBucketQueue = BucketQueue(
+                concurrentTaskLimit: concurrentTaskLimitPerBucket,
+                logger: logger
+            )
             bucketQueues[bucketName] = newBucketQueue
             return newBucketQueue
         }
@@ -29,8 +37,8 @@ internal actor S3TMConcurrencyManager {
 
     internal func taskCompleted(forBucket bucketName: String) async {
         guard let queue = bucketQueues[bucketName] else { return }
-        let isInactive = await queue.taskCompleted()
-        if isInactive {
+        await queue.taskCompleted()
+        if await queue.isInactive {
             // Remove queue if it's inactive.
             bucketQueues.removeValue(forKey: bucketName)
         }
@@ -51,8 +59,11 @@ private actor BucketQueue {
     // The maximum number of concurrent tasks allowed for the bucket.
     private let concurrentTaskLimit: Int
 
-    internal init(concurrentTaskLimit: Int) {
+    private let logger: SwiftLogger
+
+    internal init(concurrentTaskLimit: Int, logger: SwiftLogger) {
         self.concurrentTaskLimit = concurrentTaskLimit
+        self.logger = logger
     }
 
     internal var hasWaitingContinuations: Bool {
@@ -65,18 +76,17 @@ private actor BucketQueue {
 
     private func addContinuation(_ continuation: CheckedContinuation<Void, Never>) {
         waitingContinuations.append(continuation)
-        resumeNextContinuationIfPossible()
+        tryResumeNextContinuation()
     }
 
-    internal func taskCompleted() -> Bool {
+    internal func taskCompleted() {
         activeTaskCount -= 1
         assert(
             activeTaskCount > -1,
             "Running continuation count went below zero. "
             + "This should never happen."
         )
-        resumeNextContinuationIfPossible()
-        return isInactive
+        tryResumeNextContinuation()
     }
 
     internal func waitForPermission() async {
@@ -85,8 +95,14 @@ private actor BucketQueue {
         }
     }
 
-    private func resumeNextContinuationIfPossible() {
-        guard hasWaitingContinuations, activeTaskCount < concurrentTaskLimit else { return }
+    private func tryResumeNextContinuation() {
+        guard hasWaitingContinuations, activeTaskCount < concurrentTaskLimit else {
+            logger.debug(
+                "Unable to resume next continuation yet. "
+                + "activeTaskCount: \(activeTaskCount) & hasWaitingContinuations: \(hasWaitingContinuations)."
+            )
+            return
+        }
 
         let nextContinuation = waitingContinuations.removeFirst()
         activeTaskCount += 1
