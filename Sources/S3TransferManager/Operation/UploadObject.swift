@@ -10,7 +10,6 @@ import enum Smithy.ByteStream
 import struct Foundation.Data
 
 public extension S3TransferManager {
-    // swiftlint:disable function_body_length
     /// Uploads a single object to an S3 bucket.
     ///
     /// Returns a `Task` immediately after function call; upload is handled in the background using asynchronous child tasks.
@@ -24,121 +23,130 @@ public extension S3TransferManager {
     func uploadObject(input: UploadObjectInput) throws -> Task<UploadObjectOutput, Error> {
         return Task {
             let s3 = config.s3Client
-            var payloadSize: Int = -1
             var uploadID: String = ""
-            var numParts: Int = -1
-            var partSize: Int = -1
+            var payloadSize = -1, numParts = -1, partSize = -1
 
             do {
                 payloadSize = try await resolvePayloadSize(of: input.putObjectInput.body)
-                onTransferInitiated(
-                    input.transferListeners,
-                    input,
-                    SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
-                )
+                let snapshot = SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
+                input.transferListeners.forEach { $0.onTransferInitiated(input: input, snapshot: snapshot) }
 
-                // If payload is below threshold, just do a single putObject.
                 if payloadSize < config.multipartUploadThresholdBytes {
-                    let bucketName = input.putObjectInput.bucket!
-                    let putObjectOutput = try await withBucketPermission(bucketName: bucketName) {
-                        try await s3.putObject(input: input.putObjectInput)
-                    }
-
-                    let uploadObjectOutput = UploadObjectOutput(putObjectOutput: putObjectOutput)
-                    onBytesTransferred(
-                        input.transferListeners,
-                        input,
-                        SingleObjectTransferProgressSnapshot(transferredBytes: payloadSize, totalBytes: payloadSize)
-                    )
-                    onTransferComplete(
-                        input.transferListeners,
-                        input,
-                        uploadObjectOutput,
-                        SingleObjectTransferProgressSnapshot(transferredBytes: payloadSize, totalBytes: payloadSize)
-                    )
-                    return uploadObjectOutput
+                    return try await singlePutObject(input: input, payloadSize: payloadSize, s3: s3)
                 }
 
-                // Otherwise, use MPU.
-                (uploadID, numParts, partSize) = try await prepareMPU(
-                    s3: s3,
-                    payloadSize: payloadSize,
-                    input: input
-                )
+                (uploadID, numParts, partSize) = try await prepareMPU(input: input, payloadSize: payloadSize, s3: s3)
             } catch {
-                onTransferFailed(
-                    input.transferListeners,
-                    input,
-                    SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize),
-                    error
-                )
+                let snapshot = SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
+                input.transferListeners.forEach { $0.onTransferFailed(input: input, snapshot: snapshot, error: error) }
                 throw error
             }
 
-            // The actor used to keep track of the number of uploaded bytes.
-            let progressTracker = ObjectTransferProgressTracker()
-
             // Concurrently upload all the parts.
-            // If an error is thrown at any point within the do-block, MPU is aborted in catch.
+            let progressTracker = ObjectTransferProgressTracker()
             do {
-                let completedParts = try await uploadPartsConcurrently(
-                    s3: s3,
+                return try await mpu(
                     input: input,
-                    uploadID: uploadID,
                     numParts: numParts,
                     partSize: partSize,
                     payloadSize: payloadSize,
-                    progressTracker: progressTracker
-                )
-
-                let completeMPUOutput = try await completeMPU(
+                    progressTracker: progressTracker,
                     s3: s3,
-                    input: input,
-                    uploadID: uploadID,
-                    completedParts: completedParts,
-                    payloadSize: payloadSize
+                    uploadID: uploadID
                 )
-
-                let uploadObjectOutput = UploadObjectOutput(completeMultipartUploadOutput: completeMPUOutput)
-
-                onTransferComplete(
-                    input.transferListeners,
-                    input,
-                    uploadObjectOutput,
-                    SingleObjectTransferProgressSnapshot(
-                        transferredBytes: await progressTracker.transferredBytes,
-                        totalBytes: payloadSize
-                    )
-                )
-                return uploadObjectOutput
             } catch let originalError {
-                onTransferFailed(
-                    input.transferListeners,
-                    input,
-                    SingleObjectTransferProgressSnapshot(
-                        transferredBytes: await progressTracker.transferredBytes,
-                        totalBytes: payloadSize
-                    ),
-                    originalError
+                try await handleMPUError(
+                    input: input,
+                    originalError: originalError,
+                    payloadSize: payloadSize,
+                    progressTracker: progressTracker,
+                    s3: s3,
+                    uploadID: uploadID
                 )
-                do {
-                    try await abortMPU(
-                        s3: s3,
-                        input: input,
-                        uploadID: uploadID,
-                        originalError: originalError
-                    )
-                } catch let abortError {
-                    throw S3TMUploadObjectError.failedToAbortMPU(
-                        errorFromMPUOperation: originalError,
-                        errorFromFailedAbortMPUOperation: abortError
-                    )
-                }
                 throw originalError
             }
         }
     }
-    // swiftlint:enable function_body_length
+
+    private func singlePutObject(
+        input: UploadObjectInput,
+        payloadSize: Int,
+        s3: S3Client
+    ) async throws -> UploadObjectOutput {
+        let bucketName = input.putObjectInput.bucket!
+        let putObjectOutput = try await withBucketPermission(bucketName: bucketName) {
+            try await s3.putObject(input: input.putObjectInput)
+        }
+
+        let uploadObjectOutput = UploadObjectOutput(putObjectOutput: putObjectOutput)
+        let snapshot = SingleObjectTransferProgressSnapshot(
+            transferredBytes: payloadSize,
+            totalBytes: payloadSize
+        )
+        input.transferListeners.forEach { $0.onBytesTransferred(
+            input: input,
+            snapshot: snapshot
+        )}
+        input.transferListeners.forEach { $0.onTransferComplete(
+            input: input,
+            output: uploadObjectOutput,
+            snapshot: snapshot
+        )}
+        return uploadObjectOutput
+    }
+
+    private func mpu(
+        input: UploadObjectInput,
+        numParts: Int,
+        partSize: Int,
+        payloadSize: Int,
+        progressTracker: ObjectTransferProgressTracker,
+        s3: S3Client,
+        uploadID: String
+    ) async throws -> UploadObjectOutput {
+        let completedParts = try await uploadPartsConcurrently(
+            input: input,
+            numParts: numParts,
+            partSize: partSize,
+            payloadSize: payloadSize,
+            progressTracker: progressTracker,
+            s3: s3,
+            uploadID: uploadID
+        )
+        let completeMPUOutput = try await completeMPU(completedParts, input, payloadSize, s3, uploadID)
+        let uploadObjectOutput = UploadObjectOutput(completeMultipartUploadOutput: completeMPUOutput)
+        let snapshot = SingleObjectTransferProgressSnapshot(
+            transferredBytes: await progressTracker.transferredBytes,
+            totalBytes: payloadSize
+        )
+        input.transferListeners.forEach {
+            $0.onTransferComplete(input: input, output: uploadObjectOutput, snapshot: snapshot)
+        }
+        return uploadObjectOutput
+    }
+
+    private func handleMPUError(
+        input: UploadObjectInput,
+        originalError: Error,
+        payloadSize: Int,
+        progressTracker: ObjectTransferProgressTracker,
+        s3: S3Client,
+        uploadID: String
+    ) async throws {
+        let snapshot = SingleObjectTransferProgressSnapshot(
+            transferredBytes: await progressTracker.transferredBytes,
+            totalBytes: payloadSize
+        )
+        input.transferListeners.forEach { $0.onTransferFailed(input: input, snapshot: snapshot, error: originalError) }
+        do {
+            try await abortMPU(input, originalError, s3, uploadID)
+        } catch let abortError {
+            throw S3TMUploadObjectError.failedToAbortMPU(
+                errorFromMPUOperation: originalError,
+                errorFromFailedAbortMPUOperation: abortError
+            )
+        }
+    }
 
     internal func resolvePayloadSize(of body: ByteStream?) async throws -> Int {
         switch body {
@@ -156,9 +164,9 @@ public extension S3TransferManager {
     }
 
     private func prepareMPU(
-        s3: S3Client,
+        input: UploadObjectInput,
         payloadSize: Int,
-        input: UploadObjectInput
+        s3: S3Client
     ) async throws -> (uploadID: String, numParts: Int, partSize: Int) {
         let bucketName = input.putObjectInput.bucket!
 
@@ -181,13 +189,13 @@ public extension S3TransferManager {
 
     // Uploads & returns completed parts used to complete MPU.
     private func uploadPartsConcurrently(
-        s3: S3Client,
         input: UploadObjectInput,
-        uploadID: String,
         numParts: Int,
         partSize: Int,
         payloadSize: Int,
-        progressTracker: ObjectTransferProgressTracker
+        progressTracker: ObjectTransferProgressTracker,
+        s3: S3Client,
+        uploadID: String
     ) async throws -> [S3ClientTypes.CompletedPart] {
         var allCompletedParts: [S3ClientTypes.CompletedPart] = []
         let batchSize = concurrentTaskLimitPerBucket
@@ -210,47 +218,19 @@ public extension S3TransferManager {
                     try Task.checkCancellation()
                     group.addTask {
                         return try await self.withBucketPermission(bucketName: bucketName) {
-                            try Task.checkCancellation()
-                            let partData = try await {
-                                let partOffset = (partNumber - 1) * partSize
-                                // Either take full part size or remainder (only for the last part).
-                                let resolvedPartSize = min(partSize, payloadSize - partOffset)
-                                return try await self.readPartData(
-                                    input: input,
-                                    partSize: resolvedPartSize,
-                                    partOffset: partOffset,
-                                    byteStreamPartReader: byteStreamPartReader
-                                )
-                            }()
-
-                            let uploadPartInput = input.getUploadPartInput(
-                                body: ByteStream.data(partData),
+                            return try await self.uploadPart(
+                                byteStreamPartReader: byteStreamPartReader,
+                                input: input,
                                 partNumber: partNumber,
+                                partSize: partSize,
+                                payloadSize: payloadSize,
+                                progressTracker: progressTracker,
+                                s3: s3,
                                 uploadID: uploadID
-                            )
-                            let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
-
-                            let transferredBytes = await progressTracker.addBytes(partData.count)
-                            self.onBytesTransferred(
-                                input.transferListeners,
-                                input,
-                                SingleObjectTransferProgressSnapshot(
-                                    transferredBytes: transferredBytes,
-                                    totalBytes: payloadSize
-                                )
-                            )
-                            return S3ClientTypes.CompletedPart(
-                                checksumCRC32: uploadPartOutput.checksumCRC32,
-                                checksumCRC32C: uploadPartOutput.checksumCRC32C,
-                                checksumSHA1: uploadPartOutput.checksumSHA1,
-                                checksumSHA256: uploadPartOutput.checksumSHA256,
-                                eTag: uploadPartOutput.eTag,
-                                partNumber: partNumber
                             )
                         }
                     }
                 }
-
                 // Collect the results from this batch.
                 var batchResults: [S3ClientTypes.CompletedPart] = []
                 for try await part in group {
@@ -258,13 +238,59 @@ public extension S3TransferManager {
                 }
                 return batchResults
             }
-
             // Add this batch's results to our overall collection.
             allCompletedParts.append(contentsOf: batchCompletedParts)
         }
-
         // Sort all parts by part number before returning.
         return allCompletedParts.sorted { $0.partNumber! < $1.partNumber! }
+    }
+
+    private func uploadPart(
+        byteStreamPartReader: ByteStreamPartReader,
+        input: UploadObjectInput,
+        partNumber: Int,
+        partSize: Int,
+        payloadSize: Int,
+        progressTracker: ObjectTransferProgressTracker,
+        s3: S3Client,
+        uploadID: String
+    ) async throws -> S3ClientTypes.CompletedPart {
+        try Task.checkCancellation()
+        let partData = try await {
+            let partOffset = (partNumber - 1) * partSize
+            // Either take full part size or remainder (only for the last part).
+            let resolvedPartSize = min(partSize, payloadSize - partOffset)
+            return try await self.readPartData(
+                input: input,
+                partSize: resolvedPartSize,
+                partOffset: partOffset,
+                byteStreamPartReader: byteStreamPartReader
+            )
+        }()
+
+        let uploadPartInput = input.getUploadPartInput(
+            body: ByteStream.data(partData),
+            partNumber: partNumber,
+            uploadID: uploadID
+        )
+        let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
+
+        let snapshot = SingleObjectTransferProgressSnapshot(
+            transferredBytes: await progressTracker.addBytes(partData.count),
+            totalBytes: payloadSize
+        )
+        input.transferListeners.forEach { $0.onBytesTransferred(
+            input: input,
+            snapshot: snapshot
+        )}
+        return S3ClientTypes.CompletedPart(
+            checksumCRC32: uploadPartOutput.checksumCRC32,
+            checksumCRC32C: uploadPartOutput.checksumCRC32C,
+            checksumSHA1: uploadPartOutput.checksumSHA1,
+            checksumSHA256: uploadPartOutput.checksumSHA256,
+            eTag: uploadPartOutput.eTag,
+            partNumber: partNumber
+        )
     }
 
     internal func readPartData(
@@ -279,7 +305,6 @@ public extension S3TransferManager {
         } else if case .stream = input.putObjectInput.body {
             partData = try await byteStreamPartReader!.readPart(partOffset: partOffset, partSize: partSize)
         }
-
         guard let resolvedPartData = partData else {
             throw S3TMUploadObjectError.failedToReadPart
         }
@@ -287,79 +312,32 @@ public extension S3TransferManager {
     }
 
     private func completeMPU(
-        s3: S3Client,
-        input: UploadObjectInput,
-        uploadID: String,
-        completedParts: [S3ClientTypes.CompletedPart],
-        payloadSize: Int
+        _ completedParts: [S3ClientTypes.CompletedPart],
+        _ input: UploadObjectInput,
+        _ payloadSize: Int,
+        _ s3: S3Client,
+        _ uploadID: String
     ) async throws -> CompleteMultipartUploadOutput {
         let bucketName = input.putObjectInput.bucket!
-
         let completeMPUInput = input.getCompleteMultipartUploadInput(
             multipartUpload: S3ClientTypes.CompletedMultipartUpload(parts: completedParts),
             uploadID: uploadID,
             mpuObjectSize: payloadSize
         )
-
         return try await withBucketPermission(bucketName: bucketName) {
             return try await s3.completeMultipartUpload(input: completeMPUInput)
         }
     }
 
     private func abortMPU(
-        s3: S3Client,
-        input: UploadObjectInput,
-        uploadID: String,
-        originalError: Error
+        _ input: UploadObjectInput,
+        _ originalError: Error,
+        _ s3: S3Client,
+        _ uploadID: String
     ) async throws {
         let bucketName = input.putObjectInput.bucket!
-
         try await withBucketPermission(bucketName: bucketName) {
             _ = try await s3.abortMultipartUpload(input: input.getAbortMultipartUploadInput(uploadID: uploadID))
-        }
-    }
-
-    // TransferListener helper functions for `uploadObject`.
-
-    private func onTransferInitiated(
-        _ listeners: [UploadObjectTransferListener],
-        _ input: UploadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferInitiated(input: input, snapshot: snapshot)
-        }
-    }
-
-    private func onBytesTransferred(
-        _ listeners: [UploadObjectTransferListener],
-        _ input: UploadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onBytesTransferred(input: input, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferComplete(
-        _ listeners: [UploadObjectTransferListener],
-        _ input: UploadObjectInput,
-        _ output: UploadObjectOutput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferFailed(
-        _ listeners: [UploadObjectTransferListener],
-        _ input: UploadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot,
-        _ error: Error
-    ) {
-        for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
         }
     }
 }
