@@ -23,11 +23,8 @@ public extension S3TransferManager {
     /// - Returns: An asynchronous `Task<UploadDirectoryOutput, Error>` that can be optionally waited on or cancelled as needed.
     func uploadDirectory(input: UploadDirectoryInput) throws -> Task<UploadDirectoryOutput, Error> {
         return Task {
-            onTransferInitiated(
-                input.directoryTransferListeners,
-                input,
-                DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
-            )
+            let snapshot = DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
+            input.directoryTransferListeners.forEach { $0.onTransferInitiated(input: input, snapshot: snapshot) }
 
             // Concurrency-safe storage for results of `uploadObject` child tasks.
             let results = Results()
@@ -44,28 +41,12 @@ public extension S3TransferManager {
                     // Task group returns nothing.
                     returning: Void.self
                 ) { group in
-                    // Add `uploadObject` child tasks.
                     var uploadObjectOperationNum = 1
                     for url in nestedFileURLs {
-                        // Save current operation num as constant let.
-                        // Using `uploadObjectOperationNum` directly in the group.addTask closure below results
-                        //  in same value being used for the tasks bc var is a reference type & tasks get created
-                        //  before they even start running. E.g., by the first task runs, `uploadObjectOperationNum`
-                        //  could already be updated to its highest value.
+                        // Need to capture specific operation number value for each task.
                         let operationNum = uploadObjectOperationNum
                         group.addTask {
-                            do {
-                                try Task.checkCancellation()
-                                _ = try await self.uploadObjectFromURL(
-                                    url: url,
-                                    input: input,
-                                    operationNumber: operationNum
-                                )
-                                return .success(())
-                            } catch {
-                                // Errors are caught and wrapped in .failure to allow individual error handling.
-                                return .failure(error)
-                            }
+                            return try await self.uploadObjectTask(input, operationNum, url)
                         }
                         uploadObjectOperationNum += 1
                     }
@@ -82,36 +63,65 @@ public extension S3TransferManager {
                         }
                     }
                 }
-
-                let (successfulUploadCount, failedUploadCount) = await results.getValues()
-                let uploadDirectoryOutput = UploadDirectoryOutput(
-                    objectsUploaded: successfulUploadCount,
-                    objectsFailed: failedUploadCount
-                )
-                onTransferComplete(
-                    input.directoryTransferListeners,
-                    input,
-                    uploadDirectoryOutput,
-                    DirectoryTransferProgressSnapshot(
-                        transferredFiles: successfulUploadCount,
-                        totalFiles: successfulUploadCount + failedUploadCount
-                    )
-                )
-                return uploadDirectoryOutput
+                return await processResultsAndGetOutput(input: input, results: results)
             } catch {
-                let (successfulUploadCount, failedUploadCount) = await results.getValues()
-                onTransferFailed(
-                    input.directoryTransferListeners,
-                    input,
-                    DirectoryTransferProgressSnapshot(
-                        transferredFiles: successfulUploadCount,
-                        totalFiles: successfulUploadCount + failedUploadCount
-                    ),
-                    error
-                )
+                await processResultsBeforeThrowing(error: error, input: input, results: results)
                 throw error
             }
         }
+    }
+
+    private func uploadObjectTask(
+        _ input: UploadDirectoryInput,
+        _ operationNum: Int,
+        _ url: URL
+    ) async throws -> Result<Void, Error> {
+        do {
+            try Task.checkCancellation()
+            _ = try await self.uploadObjectFromURL(input, operationNum, url)
+            return .success(())
+        } catch {
+            // Errors are caught and wrapped in .failure to allow individual error handling.
+            return .failure(error)
+        }
+    }
+
+    private func processResultsAndGetOutput(
+        input: UploadDirectoryInput,
+        results: Results
+    ) async -> UploadDirectoryOutput {
+        let (successfulUploadCount, failedUploadCount) = await results.getValues()
+        let uploadDirectoryOutput = UploadDirectoryOutput(
+            objectsUploaded: successfulUploadCount,
+            objectsFailed: failedUploadCount
+        )
+        let snapshot = DirectoryTransferProgressSnapshot(
+            transferredFiles: successfulUploadCount,
+            totalFiles: successfulUploadCount + failedUploadCount
+        )
+        input.directoryTransferListeners.forEach { $0.onTransferComplete(
+            input: input,
+            output: uploadDirectoryOutput,
+            snapshot: snapshot
+        )}
+        return uploadDirectoryOutput
+    }
+
+    private func processResultsBeforeThrowing(
+        error: Error,
+        input: UploadDirectoryInput,
+        results: Results
+    ) async {
+        let (successfulUploadCount, failedUploadCount) = await results.getValues()
+        let snapshot = DirectoryTransferProgressSnapshot(
+            transferredFiles: successfulUploadCount,
+            totalFiles: successfulUploadCount + failedUploadCount
+        )
+        input.directoryTransferListeners.forEach { $0.onTransferFailed(
+            input: input,
+            snapshot: snapshot,
+            error: error
+        )}
     }
 
     internal func getNestedFileURLs(
@@ -204,15 +214,11 @@ public extension S3TransferManager {
     }
 
     private func uploadObjectFromURL(
-        url: URL,
-        input: UploadDirectoryInput,
-        operationNumber: Int
+        _ input: UploadDirectoryInput,
+        _ operationNumber: Int,
+        _ url: URL
     ) async throws {
-        let resolvedObjectKey = try getResolvedObjectKey(
-            of: url,
-            inDir: input.source,
-            input: input
-        )
+        let resolvedObjectKey = try getResolvedObjectKey(of: url, inDir: input.source, input: input)
 
         var fileHandle: FileHandle
         do {
@@ -221,6 +227,8 @@ public extension S3TransferManager {
             logger.debug("Could not read from URL: \(url.absoluteString), skipping.")
             return
         }
+
+        defer { try? fileHandle.close() }
 
         let putObjectInput = input.putObjectRequestCallback(PutObjectInput(
             body: .stream(FileStream(fileHandle: fileHandle)),
@@ -265,49 +273,13 @@ public extension S3TransferManager {
         }
         // Step 3: retrieve the relative path of the file URL.
         // Get absolute string of file URL & dir URL; remove dir URL prefix from file URL to get the relative path.
-        let dirAbsoluteString = dir.absoluteString
-        let fileAbsoluteString = url.absoluteString
-        var relativePath = fileAbsoluteString.removePrefix(dirAbsoluteString).removePrefix(defaultPathSeparator())
+        var relativePath = url.absoluteString.removePrefix(dir.absoluteString).removePrefix(defaultPathSeparator())
         // Step 4: if user configured a custom s3Delimiter, replace all instances of system default path separator "/" in the relative path from step 3 with the custom s3Delimiter.
         if input.s3Delimiter != defaultPathSeparator() {
             relativePath = relativePath.replacingOccurrences(of: defaultPathSeparator(), with: input.s3Delimiter)
         }
         // Step 5: prefix the string from Step 4 with the resolved prefix.
         return resolvedPrefix + relativePath
-    }
-
-    // TransferListener helper functions for `uploadDirectory`.
-
-    private func onTransferInitiated(
-        _ listeners: [UploadDirectoryTransferListener],
-        _ input: UploadDirectoryInput,
-        _ snapshot: DirectoryTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferInitiated(input: input, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferComplete(
-        _ listeners: [UploadDirectoryTransferListener],
-        _ input: UploadDirectoryInput,
-        _ output: UploadDirectoryOutput,
-        _ snapshot: DirectoryTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferFailed(
-        _ listeners: [UploadDirectoryTransferListener],
-        _ input: UploadDirectoryInput,
-        _ snapshot: DirectoryTransferProgressSnapshot,
-        _ error: Error
-    ) {
-        for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
-        }
     }
 }
 

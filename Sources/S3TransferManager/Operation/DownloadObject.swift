@@ -21,11 +21,10 @@ public extension S3TransferManager {
     /// - Returns: An asynchronous `Task<DownloadObjectOutput, Error>` that can be optionally waited on or cancelled as needed.
     func downloadObject(input: DownloadObjectInput) throws -> Task<DownloadObjectOutput, Error> {
         return Task {
-            onTransferInitiated(
-                input.transferListeners,
-                input,
-                SingleObjectTransferProgressSnapshot(transferredBytes: 0)
-            )
+            input.transferListeners.forEach { $0.onTransferInitiated(
+                input: input,
+                snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: 0)
+            )}
             defer { input.outputStream.close() }
 
             let s3 = config.s3Client
@@ -47,12 +46,11 @@ public extension S3TransferManager {
                 let downloadObjectOutput = DownloadObjectOutput(getObjectOutput: singleGetOutput)
 
                 // `downloadObject` call finished successfully. Return output.
-                onTransferComplete(
-                    input.transferListeners,
-                    input,
-                    downloadObjectOutput,
-                    SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
-                )
+                input.transferListeners.forEach { $0.onTransferComplete(
+                    input: input,
+                    output: downloadObjectOutput,
+                    snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+                )}
                 return downloadObjectOutput
             }
 
@@ -123,12 +121,14 @@ public extension S3TransferManager {
                 // Unreachable statement; added to quiet compiler.
                 throw S3TMDownloadObjectError.invalidDownloadConfiguration
             } catch {
-                onTransferFailed(
-                    input.transferListeners,
-                    input,
-                    SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes),
-                    error
+                let snapshot = SingleObjectTransferProgressSnapshot(
+                    transferredBytes: await progressTracker.transferredBytes
                 )
+                input.transferListeners.forEach { $0.onTransferFailed(
+                    input: input,
+                    snapshot: snapshot,
+                    error: error
+                )}
                 throw error
             }
         }
@@ -180,11 +180,10 @@ public extension S3TransferManager {
             throw S3TMDownloadObjectError.failedToWriteToOutputStream
         }
         let transferredBytes = await progressTracker.addBytes(bytesWritten)
-        onBytesTransferred(
-            input.transferListeners,
-            input,
-            SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
-        )
+        input.transferListeners.forEach { $0.onBytesTransferred(
+            input: input,
+            snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+        )}
     }
 
     // Handles multipart GET for Case 2.
@@ -205,12 +204,12 @@ public extension S3TransferManager {
         guard let totalParts = firstGetObjectOutput.partsCount, totalParts > 1 else {
             // `downloadObject` call finished successfully.
             let downloadObjectOutput = DownloadObjectOutput(getObjectOutput: firstGetObjectOutput)
-            onTransferComplete(
-                input.transferListeners,
-                input,
-                downloadObjectOutput,
-                SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes)
-            )
+            let transferredBytes = await progressTracker.transferredBytes
+            input.transferListeners.forEach { $0.onTransferComplete(
+                input: input,
+                output: downloadObjectOutput,
+                snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+            )}
             return downloadObjectOutput
         }
 
@@ -226,12 +225,12 @@ public extension S3TransferManager {
         // Return the first `getObject` call's output wrapped in `DownloadObjectOutput`.
         // This behavior aligns with S3 multipart download behavior in Java.
         let downloadObjectOutput = DownloadObjectOutput(getObjectOutput: firstGetObjectOutput)
-        onTransferComplete(
-            input.transferListeners,
-            input,
-            downloadObjectOutput,
-            SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes)
-        )
+        let transferredBytes = await progressTracker.transferredBytes
+        input.transferListeners.forEach { $0.onTransferComplete(
+            input: input,
+            output: downloadObjectOutput,
+            snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+        )}
         return downloadObjectOutput
     }
 
@@ -329,12 +328,12 @@ public extension S3TransferManager {
         if objectSize <= config.targetPartSizeBytes {
             // downloadObject call finished successfully. Return output of first range GET.
             let downloadObjectOutput = DownloadObjectOutput(getObjectOutput: firstRangeGetObjectOutput)
-            onTransferComplete(
-                input.transferListeners,
-                input,
-                downloadObjectOutput,
-                SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes)
-            )
+            let transferredBytes = await progressTracker.transferredBytes
+            input.transferListeners.forEach { $0.onTransferComplete(
+                input: input,
+                output: downloadObjectOutput,
+                snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+            )}
             return downloadObjectOutput
         }
 
@@ -351,12 +350,12 @@ public extension S3TransferManager {
 
         // downloadObject call finished successfully. Return output of first range GET.
         let downloadObjectOutput = DownloadObjectOutput(getObjectOutput: firstRangeGetObjectOutput)
-        onTransferComplete(
-            input.transferListeners,
-            input,
-            downloadObjectOutput,
-            SingleObjectTransferProgressSnapshot(transferredBytes: await progressTracker.transferredBytes)
-        )
+        let transferredBytes = await progressTracker.transferredBytes
+        input.transferListeners.forEach { $0.onTransferComplete(
+            input: input,
+            output: downloadObjectOutput,
+            snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+        )}
         return downloadObjectOutput
     }
 
@@ -497,50 +496,6 @@ public extension S3TransferManager {
             throw S3TMDownloadObjectError.failedToDetermineObjectSize
         }
         return size
-    }
-
-    // TransferListener helper functions for `downloadObject`.
-
-    private func onTransferInitiated(
-        _ listeners: [DownloadObjectTransferListener],
-        _ input: DownloadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferInitiated(input: input, snapshot: snapshot)
-        }
-    }
-
-    private func onBytesTransferred(
-        _ listeners: [DownloadObjectTransferListener],
-        _ input: DownloadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onBytesTransferred(input: input, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferComplete(
-        _ listeners: [DownloadObjectTransferListener],
-        _ input: DownloadObjectInput,
-        _ output: DownloadObjectOutput,
-        _ snapshot: SingleObjectTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferFailed(
-        _ listeners: [DownloadObjectTransferListener],
-        _ input: DownloadObjectInput,
-        _ snapshot: SingleObjectTransferProgressSnapshot,
-        _ error: Error
-    ) {
-        for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
-        }
     }
 }
 
