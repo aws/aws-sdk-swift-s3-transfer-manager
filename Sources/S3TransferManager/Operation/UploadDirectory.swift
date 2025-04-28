@@ -35,32 +35,15 @@ public extension S3TransferManager {
                     recursive: input.recursive,
                     followSymbolicLinks: input.followSymbolicLinks
                 )
-                try await withThrowingTaskGroup(
-                    // Each child task returns the result of a single `uploadObject` call.
-                    of: Result<Void, Error>.self,
-                    // Task group returns nothing.
-                    returning: Void.self
-                ) { group in
+                try await withThrowingTaskGroup(of: Void.self) { group in
                     var uploadObjectOperationNum = 1
                     for url in nestedFileURLs {
                         // Need to capture specific operation number value for each task.
                         let operationNum = uploadObjectOperationNum
                         group.addTask {
-                            return try await self.uploadObjectTask(input, operationNum, url)
+                            return try await self.uploadObjectTask(input, operationNum, url, results)
                         }
                         uploadObjectOperationNum += 1
-                    }
-
-                    while let uploadObjectResult = try await group.next() {
-                        switch uploadObjectResult {
-                        case .success:
-                            await results.incrementSuccess()
-                        case .failure(let error):
-                            await results.incrementFail()
-                            // Call failure policy closure to handle `uploadObject` failure.
-                            // If this throws an error, all tasks within the throwing task group are cancelled automatically.
-                            try await input.failurePolicy(error, input)
-                        }
                     }
                 }
                 return await processResultsAndGetOutput(input: input, results: results)
@@ -74,15 +57,18 @@ public extension S3TransferManager {
     private func uploadObjectTask(
         _ input: UploadDirectoryInput,
         _ operationNum: Int,
-        _ url: URL
-    ) async throws -> Result<Void, Error> {
+        _ url: URL,
+        _ results: Results
+    ) async throws {
         do {
             try Task.checkCancellation()
             _ = try await self.uploadObjectFromURL(input, operationNum, url)
-            return .success(())
+            await results.incrementSuccess()
         } catch {
-            // Errors are caught and wrapped in .failure to allow individual error handling.
-            return .failure(error)
+            await results.incrementFail()
+            // Call failure policy closure to handle `uploadObject` failure.
+            // If this throws an error, all tasks within the throwing task group are cancelled automatically.
+            try await input.failurePolicy(error, input)
         }
     }
 
@@ -259,12 +245,10 @@ public extension S3TransferManager {
 
     internal func getResolvedObjectKey(of url: URL, inDir dir: URL, input: UploadDirectoryInput) throws -> String {
         // Step 1: if given a non-default s3Delimter, throw validation exception if the file name contains s3Delimiter.
-        if input.s3Delimiter != defaultPathSeparator() {
-            guard !url.lastPathComponent.contains(input.s3Delimiter) else {
-                throw S3TMUploadDirectoryError.InvalidFileName(
-                    "The file \"\(url.absoluteString)\" has S3 delimiter \"\(input.s3Delimiter)\" in its name."
-                )
-            }
+        if input.s3Delimiter != defaultPathSeparator() && url.lastPathComponent.contains(input.s3Delimiter) {
+            throw S3TMUploadDirectoryError.InvalidFileName(
+                "The file \"\(url.absoluteString)\" has S3 delimiter \"\(input.s3Delimiter)\" in its name."
+            )
         }
         // Step 2: append s3Delimiter to s3Prefix if it does not already end with it.
         var resolvedPrefix: String = ""
