@@ -21,11 +21,10 @@ public extension S3TransferManager {
     /// - Returns: An asynchronous `Task<DownloadBucketOutput, Error>` that can be optionally waited on or cancelled as needed.
     func downloadBucket(input: DownloadBucketInput) throws -> Task<DownloadBucketOutput, Error> {
         return Task {
-            onTransferInitiated(
-                input.directoryTransferListeners,
-                input,
-                DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
-            )
+            input.directoryTransferListeners.forEach { $0.onTransferInitiated(
+                input: input,
+                snapshot: DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
+            )}
             let s3 = config.s3Client
             // Concurrency-safe storage for results of `downloadObject` child tasks.
             let results = Results()
@@ -97,27 +96,27 @@ public extension S3TransferManager {
                     objectsDownloaded: successfulDownloadCount,
                     objectsFailed: failedDownloadCount
                 )
-                onTransferComplete(
-                    input.directoryTransferListeners,
-                    input,
-                    downloadBucketOutput,
-                    DirectoryTransferProgressSnapshot(
-                        transferredFiles: successfulDownloadCount,
-                        totalFiles: successfulDownloadCount + failedDownloadCount
-                    )
+                let snapshot = DirectoryTransferProgressSnapshot(
+                    transferredFiles: successfulDownloadCount,
+                    totalFiles: successfulDownloadCount + failedDownloadCount
                 )
+                input.directoryTransferListeners.forEach { $0.onTransferComplete(
+                    input: input,
+                    output: downloadBucketOutput,
+                    snapshot: snapshot
+                )}
                 return downloadBucketOutput
             } catch {
                 let (successfulDownloadCount, failedDownloadCount) = await results.getValues()
-                onTransferFailed(
-                    input.directoryTransferListeners,
-                    input,
-                    DirectoryTransferProgressSnapshot(
-                        transferredFiles: successfulDownloadCount,
-                        totalFiles: successfulDownloadCount + failedDownloadCount
-                    ),
-                    error
+                let snapshot = DirectoryTransferProgressSnapshot(
+                    transferredFiles: successfulDownloadCount,
+                    totalFiles: successfulDownloadCount + failedDownloadCount
                 )
+                input.directoryTransferListeners.forEach {$0.onTransferFailed(
+                    input: input,
+                    snapshot: snapshot,
+                    error: error
+                )}
                 throw error
             }
         }
@@ -285,40 +284,6 @@ public extension S3TransferManager {
 
         // Create the file at the specified location
         fileManager.createFile(atPath: url.path, contents: nil)
-    }
-
-    // TransferListener helper functions for `downloadBucket`.
-
-    private func onTransferInitiated(
-        _ listeners: [DownloadBucketTransferListener],
-        _ input: DownloadBucketInput,
-        _ snapshot: DirectoryTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferInitiated(input: input, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferComplete(
-        _ listeners: [DownloadBucketTransferListener],
-        _ input: DownloadBucketInput,
-        _ output: DownloadBucketOutput,
-        _ snapshot: DirectoryTransferProgressSnapshot
-    ) {
-        for listener in listeners {
-            listener.onTransferComplete(input: input, output: output, snapshot: snapshot)
-        }
-    }
-
-    private func onTransferFailed(
-        _ listeners: [DownloadBucketTransferListener],
-        _ input: DownloadBucketInput,
-        _ snapshot: DirectoryTransferProgressSnapshot,
-        _ error: Error
-    ) {
-        for listener in listeners {
-            listener.onTransferFailed(input: input, snapshot: snapshot, error: error)
-        }
     }
 }
 
