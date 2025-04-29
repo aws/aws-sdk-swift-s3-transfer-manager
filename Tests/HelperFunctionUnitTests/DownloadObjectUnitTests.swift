@@ -145,14 +145,18 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
 
     func testParseBytesRangeStart() async throws {
         let startRangeString = "bytes=1-"
-        let (startByte, endByte) = try DownloadObjectUnitTests.tm.parseBytesRange(str: startRangeString)
+        let (startByte, endByte) = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(
+            headerStr: startRangeString
+        )
         XCTAssertEqual(startByte, 1)
         XCTAssertNil(endByte)
     }
 
     func testParseBytesRangeStartAndEnd() async throws {
         let startEndRangeString = "bytes=1-99"
-        let (startByte, endByte) = try DownloadObjectUnitTests.tm.parseBytesRange(str: startEndRangeString)
+        let (startByte, endByte) = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(
+            headerStr: startEndRangeString
+        )
         XCTAssertEqual(startByte, 1)
         XCTAssertEqual(endByte, 99)
     }
@@ -160,7 +164,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
     func testParseBytesRangeSuffix() async throws {
         let suffixRangeString = "bytes=-99"
         do {
-            _ = try DownloadObjectUnitTests.tm.parseBytesRange(str: suffixRangeString)
+            _ = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(headerStr: suffixRangeString)
             XCTFail("Expected S3TMDownloadObjectError.invalidRangeFormat to be thrown.")
         } catch S3TMDownloadObjectError.invalidRangeFormat {
             // Success; expected error thrown.
@@ -170,7 +174,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
     func testParseBytesRangeMultipleRanges() async throws {
         let multipleRangeString = "bytes=1-99,100-103"
         do {
-            _ = try DownloadObjectUnitTests.tm.parseBytesRange(str: multipleRangeString)
+            _ = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(headerStr: multipleRangeString)
             XCTFail("Expected S3TMDownloadObjectError.invalidRangeFormat to be thrown.")
         } catch S3TMDownloadObjectError.invalidRangeFormat {
             // Success; expected error thrown.
@@ -181,7 +185,9 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
 
     func testGetSizeFromContentRangeStringValidSize() async throws {
         let validContentRangeValue = "bytes 1-99/100"
-        let parsedSize = try DownloadObjectUnitTests.tm.getSizeFromContentRangeString(str: validContentRangeValue)
+        let parsedSize = try DownloadObjectUnitTests.tm.getObjectSizeFromContentRangeHeader(
+            headerStr: validContentRangeValue
+        )
         let expectedSize = 100
         XCTAssertEqual(parsedSize, expectedSize)
     }
