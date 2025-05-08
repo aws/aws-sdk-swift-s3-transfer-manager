@@ -35,7 +35,11 @@ public extension S3TransferManager {
                     // Add `downloadObject` child tasks.
                     var downloadObjectOperationNum = 1
                     for pair in objectKeyToCreatedFileURLMap {
-                        // Save current operation num as constant let. Using `downloadObjectOperationNum` directly in the group.addTask closure below results in same value being used for the tasks bc var is a reference type & tasks get created before they even start running. E.g., by the first task runs, `downloadObjectOperationNum` could already be updated to its highest value.
+                        // Save current operation num as constant let.
+                        // Using `downloadObjectOperationNum` directly in the group.addTask closure below results
+                        //  in same value being used for the tasks bc var is a reference type & tasks get created
+                        //  before they even start running. E.g., by the first task runs, `downloadObjectOperationNum`
+                        //  could already be updated to its highest value.
                         let operationNum = downloadObjectOperationNum
                         group.addTask {
                             return try await self.downloadObjectTask(input, pair, operationNum, results)

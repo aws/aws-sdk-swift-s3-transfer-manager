@@ -110,7 +110,7 @@ public extension S3TransferManager {
         _ s3: S3Client
     ) async throws -> DownloadObjectOutput {
         let singleGetOutput = try await performSingleGET(input, input.getObjectInput, progressTracker, s3)
-        return await publishTranferCompleteAndReturnOutput(singleGetOutput, input, progressTracker)
+        return await publishTransferCompleteAndReturnOutput(singleGetOutput, input, progressTracker)
     }
 
     // Helper that makes a single GetObject request; used by all cases.
@@ -147,12 +147,12 @@ public extension S3TransferManager {
 
         // Return if there's no more parts.
         guard let totalParts = triageGETOutput.partsCount, totalParts > 1 else {
-            return await publishTranferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+            return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
         }
 
         // Otherwise, fetch all remaining parts and write to the output stream. Then return.
         try await getRemainingObjectWithPartGETs(input, progressTracker, s3, totalParts)
-        return await publishTranferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+        return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
     }
 
     private func getRemainingObjectWithPartGETs(
@@ -210,7 +210,7 @@ public extension S3TransferManager {
 
         // Return if one range GET was enough to get everything.
         if objectSize <= config.targetPartSizeBytes {
-            return await publishTranferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+            return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
         }
 
         // Otherwise, fetch all remaining segments and write to the output stream.
@@ -218,7 +218,7 @@ public extension S3TransferManager {
         let start = startByte + config.targetPartSizeBytes
         try await getRemainingObjectWithRangedGETs(endByte, input, objectSize, progressTracker, s3, start)
 
-        return await publishTranferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+        return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
     }
 
     private func determineObjectSize(
@@ -239,7 +239,7 @@ public extension S3TransferManager {
         }
     }
 
-    private func publishTranferCompleteAndReturnOutput(
+    private func publishTransferCompleteAndReturnOutput(
         _ firstGetObjectOutput: GetObjectOutput,
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker
@@ -322,11 +322,11 @@ public extension S3TransferManager {
         _ progressTracker: ObjectTransferProgressTracker
     ) async throws {
         if outputStream.streamStatus == .notOpen { outputStream.open() }
-        var tempBuffer = [UInt8](repeating: 0, count: data.count)
-        // Copy data to temporary buffer.
-        data.copyBytes(to: &tempBuffer, count: data.count)
-        // Write buffer to output stream.
-        let bytesWritten = outputStream.write(&tempBuffer, maxLength: tempBuffer.count)
+        // Write to output stream.
+        let bytesWritten = data.withUnsafeBytes { bufferPointer -> Int in
+            guard let baseAddress = bufferPointer.baseAddress else { return -1 }
+            return outputStream.write(baseAddress.assumingMemoryBound(to: UInt8.self), maxLength: bufferPointer.count)
+        }
         if bytesWritten < 0 { throw S3TMDownloadObjectError.failedToWriteToOutputStream }
         let transferredBytes = await progressTracker.addBytes(bytesWritten)
         input.transferListeners.forEach { $0.onBytesTransferred(
