@@ -372,7 +372,7 @@ class DownloadObjectIntegTests: XCTestCase {
             getObjectInput: getObjectInput
         )).value
         let destinationFileHandle = try FileHandle(forReadingFrom: destinationFileURL)
-        let actualFileLength = try destinationFileHandle.length()
+        let actualFileLength = try destinationFileHandle.seekToEnd()
         let expectedFileLength = fileSize
         XCTAssertEqual(Int(actualFileLength), expectedFileLength)
         try FileManager.default.removeItem(at: destinationFileURL)
