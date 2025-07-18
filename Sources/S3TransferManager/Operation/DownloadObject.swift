@@ -277,7 +277,10 @@ public extension S3TransferManager {
         // Write to output stream.
         let bytesWritten = data.withUnsafeBytes { bufferPointer -> Int in
             guard let baseAddress = bufferPointer.baseAddress else { return -1 }
-            return input.outputStream.write(baseAddress.assumingMemoryBound(to: UInt8.self), maxLength: bufferPointer.count)
+            return input.outputStream.write(
+                baseAddress.assumingMemoryBound(to: UInt8.self),
+                maxLength: bufferPointer.count
+            )
         }
         if bytesWritten < 0 { throw S3TMDownloadObjectError.failedToWriteToOutputStream }
         let transferredBytes = await progressTracker.addBytes(bytesWritten)

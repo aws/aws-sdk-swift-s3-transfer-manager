@@ -104,13 +104,13 @@ class ConcurrentUploadObjectIntegTests: XCTestCase {
         try await withThrowingTaskGroup(of: Void.self) { group in
             for fileNum in 1...numFiles {
                 group.addTask {
-                    _ = try await self.tm.uploadObject(input: UploadObjectInput(putObjectInput: PutObjectInput(
+                    _ = try await self.tm.uploadObject(input: UploadObjectInput(
                         body: .stream(FileStream(fileHandle: FileHandle(
                             forReadingFrom: self.fileURLs[fileNum]!
                         ))),
                         bucket: self.bucketName,
                         key: "\(self.fileNamePrefix)\(fileNum).dat"
-                    ))).value
+                    )).value
                 }
             }
             try await group.waitForAll()

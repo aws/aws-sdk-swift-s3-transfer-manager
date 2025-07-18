@@ -104,7 +104,6 @@ public struct DownloadObjectInput: @unchecked Sendable, Identifiable {
     /// For more information about versioning, see [PutBucketVersioning](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketVersioning.html).
     public var versionId: Swift.String?
 
-
     /// Initializes `DownloadObjectInput` with provided parameters.
     public init(
         outputStream: OutputStream,

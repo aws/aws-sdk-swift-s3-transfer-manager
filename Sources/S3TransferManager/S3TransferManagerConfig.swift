@@ -7,9 +7,9 @@
 
 import AWSClientRuntime
 import AWSS3
+import AWSSDKChecksums
 import ClientRuntime
 import SmithyHTTPAPI
-import AWSSDKChecksums
 
 /// The config object for `S3TransferManager`.
 public class S3TransferManagerConfig {

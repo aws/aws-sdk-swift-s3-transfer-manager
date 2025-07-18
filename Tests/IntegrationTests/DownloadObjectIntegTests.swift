@@ -59,12 +59,12 @@ class DownloadObjectIntegTests: XCTestCase {
                     _ = try await S3TransferManager(config: S3TransferManagerConfig(
                         s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
                     ))
-                        .uploadObject(input: UploadObjectInput(putObjectInput: PutObjectInput(
+                        .uploadObject(input: UploadObjectInput(
                             body: .data(objectData),
                             bucket: bucketName,
                             key: mpuObjectKey
                         )
-                    )).value
+                    ).value
 
                     // Upload second time using single putObject with key "NonMPU-100MB".
                     _ = try await s3.putObject(input: PutObjectInput(
@@ -268,11 +268,11 @@ class DownloadObjectIntegTests: XCTestCase {
                 s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
             )
             let s3tm = S3TransferManager(config: s3tmConfig)
-            _ = try await s3tm.uploadObject(input: UploadObjectInput(putObjectInput: PutObjectInput(
+            _ = try await s3tm.uploadObject(input: UploadObjectInput(
                 body: .stream(FileStream(fileHandle: FileHandle(forUpdating: fileURL))),
                 bucket: bucketName,
                 key: key
-            ))).value
+            )).value
             // Delete the temporarily created local file now that upload is complete.
             try FileManager.default.removeItem(at: fileURL)
         }

@@ -27,7 +27,7 @@ public extension S3TransferManager {
             var payloadSize = -1, numParts = -1, partSize = -1
 
             do {
-                payloadSize = try await resolvePayloadSize(of: input.putObjectInput.body)
+                payloadSize = try await resolvePayloadSize(of: input.body)
                 let snapshot = SingleObjectTransferProgressSnapshot(transferredBytes: 0, totalBytes: payloadSize)
                 input.transferListeners.forEach { $0.onTransferInitiated(input: input, snapshot: snapshot) }
 
@@ -73,9 +73,8 @@ public extension S3TransferManager {
         payloadSize: Int,
         s3: S3Client
     ) async throws -> UploadObjectOutput {
-        let bucketName = input.putObjectInput.bucket!
-        let putObjectOutput = try await withBucketPermission(bucketName: bucketName) {
-            try await s3.putObject(input: input.putObjectInput)
+        let putObjectOutput = try await withBucketPermission(bucketName: input.bucket) {
+            try await s3.putObject(input: input.derivePutObjectInput())
         }
 
         let uploadObjectOutput = UploadObjectOutput(putObjectOutput: putObjectOutput)
@@ -139,7 +138,9 @@ public extension S3TransferManager {
         )
         input.transferListeners.forEach { $0.onTransferFailed(input: input, snapshot: snapshot, error: originalError) }
         do {
-            try await abortMPU(input, originalError, s3, uploadID)
+            try await withBucketPermission(bucketName: input.bucket) {
+                _ = try await s3.abortMultipartUpload(input: input.deriveAbortMultipartUploadInput(uploadID: uploadID))
+            }
         } catch let abortError {
             throw S3TMUploadObjectError.failedToAbortMPU(
                 errorFromMPUOperation: originalError,
@@ -168,16 +169,14 @@ public extension S3TransferManager {
         payloadSize: Int,
         s3: S3Client
     ) async throws -> (uploadID: String, numParts: Int, partSize: Int) {
-        let bucketName = input.putObjectInput.bucket!
-
-        return try await withBucketPermission(bucketName: bucketName) {
+        return try await withBucketPermission(bucketName: input.bucket) {
             // Determine part size. Division by 10,000 is bc MPU supports 10,000 parts maximum.
             let partSize = max(config.targetPartSizeBytes, payloadSize/10000)
             // Add 1 if there should be a last part smaller than regular part size.
             // E.g., say payloadSize is 103 and partSize is 10. Then we need 11 parts,
             //  where the 11th part is only 3 bytes long.
             let numParts = (payloadSize / partSize) + (payloadSize % partSize == 0 ? 0 : 1)
-            let createMPUInput = input.getCreateMultipartUploadInput()
+            let createMPUInput = input.deriveCreateMultipartUploadInput()
             let createMPUOutput = try await s3.createMultipartUpload(input: createMPUInput)
 
             guard let uploadID = createMPUOutput.uploadId else {
@@ -199,8 +198,7 @@ public extension S3TransferManager {
     ) async throws -> [S3ClientTypes.CompletedPart] {
         var allCompletedParts: [S3ClientTypes.CompletedPart] = []
         let batchSize = concurrentTaskLimitPerBucket
-        let byteStreamPartReader = ByteStreamPartReader(stream: input.putObjectInput.body!)
-        let bucketName = input.putObjectInput.bucket!
+        let byteStreamPartReader = ByteStreamPartReader(stream: input.body)
 
         // Process parts in batches.
         // Loop to numParts + 1; handles edgecase when last part is start to a new batch.
@@ -217,7 +215,7 @@ public extension S3TransferManager {
                 for partNumber in batchStart...batchEnd {
                     try Task.checkCancellation()
                     group.addTask {
-                        return try await self.withBucketPermission(bucketName: bucketName) {
+                        return try await self.withBucketPermission(bucketName: input.bucket) {
                             return try await self.uploadPart(
                                 byteStreamPartReader: byteStreamPartReader,
                                 input: input,
@@ -240,6 +238,13 @@ public extension S3TransferManager {
             }
             // Add this batch's results to our overall collection.
             allCompletedParts.append(contentsOf: batchCompletedParts)
+        }
+        // Durability validation for number of uploaded parts.
+        guard allCompletedParts.count == numParts else {
+            throw S3TMUploadObjectError.incorrectNumberOfUploadedParts(
+                message: "Expected \(numParts) uploaded parts but uploaded "
+                + "\(allCompletedParts.count) parts instead."
+            )
         }
         // Sort all parts by part number before returning.
         return allCompletedParts.sorted { $0.partNumber! < $1.partNumber! }
@@ -268,7 +273,7 @@ public extension S3TransferManager {
             )
         }()
 
-        let uploadPartInput = input.getUploadPartInput(
+        let uploadPartInput = input.deriveUploadPartInput(
             body: ByteStream.data(partData),
             partNumber: partNumber,
             uploadID: uploadID
@@ -300,9 +305,9 @@ public extension S3TransferManager {
         byteStreamPartReader: ByteStreamPartReader? = nil // Only used for stream payloads.
     ) async throws -> Data {
         var partData: Data?
-        if case .data(let data) = input.putObjectInput.body {
+        if case .data(let data) = input.body {
             partData = data?[partOffset..<(partOffset + partSize)]
-        } else if case .stream = input.putObjectInput.body {
+        } else if case .stream = input.body {
             partData = try await byteStreamPartReader!.readPart(partOffset: partOffset, partSize: partSize)
         }
         guard let resolvedPartData = partData else {
@@ -318,26 +323,13 @@ public extension S3TransferManager {
         _ s3: S3Client,
         _ uploadID: String
     ) async throws -> CompleteMultipartUploadOutput {
-        let bucketName = input.putObjectInput.bucket!
-        let completeMPUInput = input.getCompleteMultipartUploadInput(
+        let completeMPUInput = input.deriveCompleteMultipartUploadInput(
             multipartUpload: S3ClientTypes.CompletedMultipartUpload(parts: completedParts),
             uploadID: uploadID,
             mpuObjectSize: payloadSize
         )
-        return try await withBucketPermission(bucketName: bucketName) {
+        return try await withBucketPermission(bucketName: input.bucket) {
             return try await s3.completeMultipartUpload(input: completeMPUInput)
-        }
-    }
-
-    private func abortMPU(
-        _ input: UploadObjectInput,
-        _ originalError: Error,
-        _ s3: S3Client,
-        _ uploadID: String
-    ) async throws {
-        let bucketName = input.putObjectInput.bucket!
-        try await withBucketPermission(bucketName: bucketName) {
-            _ = try await s3.abortMultipartUpload(input: input.getAbortMultipartUploadInput(uploadID: uploadID))
         }
     }
 }
@@ -349,6 +341,7 @@ public enum S3TMUploadObjectError: Error {
     case failedToReadPart
     case failedToAbortMPU(errorFromMPUOperation: Error, errorFromFailedAbortMPUOperation: Error)
     case unseekableStreamPayload
+    case incorrectNumberOfUploadedParts(message: String)
 }
 
 // An actor used to read a ByteStream in parts while ensuring concurrency-safety.
