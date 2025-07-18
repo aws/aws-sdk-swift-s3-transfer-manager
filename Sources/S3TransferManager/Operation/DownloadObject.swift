@@ -51,76 +51,21 @@ public extension S3TransferManager {
         _ progressTracker: ObjectTransferProgressTracker,
         _ s3: S3Client
     ) async throws -> DownloadObjectOutput {
-        let partNumber = input.getObjectInput.partNumber
-        // Case 0: Specific part number was given. Do a single part GET.
-        if partNumber != nil {
-            return try await singleGET(input, progressTracker, s3)
+        // Case 1: Config is part GET. Do a multipart GET with MPU parts.
+        if config.multipartDownloadType == .part {
+            return try await getObjectInParts(input, progressTracker, s3)
+        } else { // Case 2: Config is range GET. Get the entire object in ranges.
+            return try await getObjectInRanges(input, progressTracker, s3)
         }
-        let downloadType = config.multipartDownloadType
-        let range = input.getObjectInput.range
-
-        // Case 1: Config is part GET with range given. Fallback to single GET with given range.
-        if range != nil && downloadType == .part {
-            return try await singleGET(input, progressTracker, s3)
-        }
-
-        // Case 2: Config is part GET with no range given. Do a multipart GET with MPU parts.
-        if downloadType == .part && range == nil {
-            return try await multiPartGET(input, progressTracker, s3)
-        }
-
-        // Case 3: Config is range GET with range given.
-        if let range, downloadType == .range {
-            let (start, end) = try parseBytesRangeHeader(headerStr: range)
-            if let end {
-                // Case 3A: Provided range is in "bytes=<start>-<end>" format.
-                // End is inclusive so must add 1 to get object size.
-                // E.g., "bytes=2-10" is a 9 byte range (byte 2 to byte 9, inclusive). 10 - 2 + 1 = 9.
-                let objectSize = end - start + 1
-
-                // If one range GET is enough to get everything, do a single range GET and return.
-                if objectSize <= config.targetPartSizeBytes {
-                    return try await singleGET(input, progressTracker, s3)
-                }
-
-                // Otherwise, get the entire object (start - provided_end) concurrently.
-                return try await multiRangeGET(input, progressTracker, s3, start, end, objectSize)
-            } else {
-                // Case 3B: Provided range is in "bytes=<start>-" format.
-                // Get the entire object (start - end_of_entire_object) concurrently with range GET.
-                return try await multiRangeGET(input, progressTracker, s3, start)
-            }
-        }
-
-        // Case 4: Config is range GET with no range given.
-        if downloadType == .range && range == nil {
-            // Get the entire object (0 - end_of_entire_object) concurrently with range GET.
-            return try await multiRangeGET(input, progressTracker, s3, 0)
-        }
-
-        // Cases 0 to 4 above covers all possible cases.
-        // Unreachable statement; added to quiet compiler.
-        throw S3TMDownloadObjectError.invalidDownloadConfiguration
     }
 
-    // Handles single GET cases: Case 0, 1, and when one range GET is enough.
-    private func singleGET(
-        _ input: DownloadObjectInput,
-        _ progressTracker: ObjectTransferProgressTracker,
-        _ s3: S3Client
-    ) async throws -> DownloadObjectOutput {
-        let singleGetOutput = try await performSingleGET(input, input.getObjectInput, progressTracker, s3)
-        return await publishTransferCompleteAndReturnOutput(singleGetOutput, input, progressTracker)
-    }
-
-    // Helper that makes a single GetObject request; used by all cases.
-    private func performSingleGET(
+    private func triageGetObject(
         _ downloadObjectInput: DownloadObjectInput,
         _ getObjectInput: GetObjectInput,
         _ progressTracker: ObjectTransferProgressTracker,
         _ s3: S3Client
     ) async throws -> GetObjectOutput {
-        let bucketName = getObjectInput.bucket!
+        let bucketName = downloadObjectInput.bucket
 
         let (getObjectOutput, outputData) = try await withBucketPermission(bucketName: bucketName) {
             try Task.checkCancellation()
@@ -132,18 +77,17 @@ public extension S3TransferManager {
             return (getObjectOutput, outputData)
         }
 
-        try await writeData(outputData, to: downloadObjectInput.outputStream, downloadObjectInput, progressTracker)
+        try await writeData(outputData, downloadObjectInput, progressTracker)
         return getObjectOutput
     }
 
-    // Handles multipart GET for Case 2.
-    private func multiPartGET(
+    private func getObjectInParts(
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker,
         _ s3: S3Client
     ) async throws -> DownloadObjectOutput {
-        let triageGETInput = input.copyGetObjectInputWithPartNumberOrRange(partNumber: 1)
-        let triageGETOutput = try await performSingleGET(input, triageGETInput, progressTracker, s3)
+        let triageGETInput = input.deriveGetObjectInput(withPartNumber: 1)
+        let triageGETOutput = try await triageGetObject(input, triageGETInput, progressTracker, s3)
 
         // Return if there's no more parts.
         guard let totalParts = triageGETOutput.partsCount, totalParts > 1 else {
@@ -151,18 +95,16 @@ public extension S3TransferManager {
         }
 
         // Otherwise, fetch all remaining parts and write to the output stream. Then return.
-        try await getRemainingObjectWithPartGETs(input, progressTracker, s3, totalParts)
+        try await downloadRemainingParts(input, progressTracker, s3, totalParts)
         return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
     }
 
-    private func getRemainingObjectWithPartGETs(
+    private func downloadRemainingParts(
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker,
         _ s3: S3Client,
         _ totalParts: Int
     ) async throws {
-        let bucketName = input.getObjectInput.bucket!
-        // Size of batch is same as the task limit per bucket.
         let batchSize = concurrentTaskLimitPerBucket
 
         // Process all parts in batches.
@@ -172,11 +114,11 @@ public extension S3TransferManager {
             try await withThrowingTaskGroup(of: (Int, ByteStream).self) { group in
                 // Add child task for each part GET in current batch.
                 for partNumber in batchStart...batchEnd {
-                    group.addTask { // Each child task returns (part_number, stream) tuple.
-                        return try await self.withBucketPermission(bucketName: bucketName) {
+                    group.addTask { // Each child task returns (part_number, bytestream) tuple.
+                        return try await self.withBucketPermission(bucketName: input.bucket) {
                             try Task.checkCancellation()
-                            let partGetObjectInput = input.copyGetObjectInputWithPartNumberOrRange(
-                                partNumber: partNumber
+                            let partGetObjectInput = input.deriveGetObjectInput(
+                                withPartNumber: partNumber
                             )
                             let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
                             return (partNumber, partGetObjectOutput.body!)
@@ -185,28 +127,24 @@ public extension S3TransferManager {
                 }
 
                 // Write results of part GETs in current batch to `input.outputStream` in order.
-                try await writeBatch(group, to: input.outputStream, batchStart, input, progressTracker)
+                try await writeBatch(group, batchStart, input, progressTracker)
             }
         }
     }
 
-    // Handles range GET for Case 3A, 3B, and 4.
-    private func multiRangeGET(
+    private func getObjectInRanges(
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker,
-        _ s3: S3Client,
-        _ startByte: Int,
-        _ endByte: Int? = nil, // Known only for "bytes=<start>-<end>".
-        _ knownObjectSize: Int? = nil // Known only for "bytes=<start>-<end>".
+        _ s3: S3Client
     ) async throws -> DownloadObjectOutput {
         // End is inclusive, so must subtract 1 to get target byte amount.
-        // E.g., if start is 2nd byte, to get 8 bytes, range becomes "bytes=2-9"; 2 + 8 - 1 = 9.
-        let triageGETInput = input.copyGetObjectInputWithPartNumberOrRange(
-            range: "bytes=\(startByte)-\(startByte + config.targetPartSizeBytes - 1)"
+        // E.g., "bytes=0-499" returns 500 bytes.
+        let triageGETInput = input.deriveGetObjectInput(
+            withRange: "bytes=0-\(config.targetPartSizeBytes - 1)"
         )
-        let triageGETOutput = try await performSingleGET(input, triageGETInput, progressTracker, s3)
+        let triageGETOutput = try await triageGetObject(input, triageGETInput, progressTracker, s3)
 
-        let objectSize = try determineObjectSize(triageGETOutput, knownObjectSize, startByte)
+        let objectSize = try determineObjectSize(triageGETOutput)
 
         // Return if one range GET was enough to get everything.
         if objectSize <= config.targetPartSizeBytes {
@@ -214,29 +152,23 @@ public extension S3TransferManager {
         }
 
         // Otherwise, fetch all remaining segments and write to the output stream.
-        // Start byte is adjusted to 2nd segment since we already did first range GET above.
-        let start = startByte + config.targetPartSizeBytes
-        try await getRemainingObjectWithRangedGETs(endByte, input, objectSize, progressTracker, s3, start)
+        try await getRemainingObjectWithRangedGETs(input, objectSize, progressTracker, s3)
 
         return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
     }
 
     private func determineObjectSize(
-        _ getObjectOutput: GetObjectOutput,
-        _ knownObjectSize: Int?,
-        _ startByte: Int
+        _ getObjectOutput: GetObjectOutput
     ) throws -> Int {
-        if let knownObjectSize {
-            // Use partial object size from <start>-<end> if present.
-            return knownObjectSize
-        } else {
-            // Determine full object size from first output's Content-Range header.
-            guard let contentRange = getObjectOutput.contentRange else {
-                throw S3TMDownloadObjectError.failedToDetermineObjectSize
-            }
-            // This is the start-byte-adjusted object size.
-            return try getObjectSizeFromContentRangeHeader(headerStr: contentRange) - startByte
+        // Determine full object size from first output's Content-Range header.
+        guard let contentRange = getObjectOutput.contentRange else {
+            throw S3TMDownloadObjectError.failedToDetermineObjectSize
         }
+        let parts = contentRange.split(separator: "/")
+        guard let sizeStr = parts.last, let size = Int(sizeStr) else {
+            throw S3TMDownloadObjectError.failedToDetermineObjectSize
+        }
+        return size
     }
 
     private func publishTransferCompleteAndReturnOutput(
@@ -255,106 +187,57 @@ public extension S3TransferManager {
     }
 
     private func getRemainingObjectWithRangedGETs(
-        _ endByte: Int? = nil, // Known only for "bytes=<start>-<end>".
         _ input: DownloadObjectInput,
         _ objectSize: Int,
         _ progressTracker: ObjectTransferProgressTracker,
-        _ s3: S3Client,
-        _ startByte: Int
+        _ s3: S3Client
     ) async throws {
         /*
             Must subtract 1 if there was no remainder, since we already sent a "triage" request that doubled as getting the object size. E.g., say `objectSize` is 100 and part size is 10. We have 90 more bytes to fetch at this point. 100 / 10 = 10. Subtract 1 to get 9, which is the remaining number of requests we need to make. Now, say object size is 103 and part size is 10. We have 93 more bytes to fetch. We need to make 10 requests to get all 93 bytes (9 x 10 byte requests, and 10th request with 3 bytes). 100 / 10 = 10. So we don't subtract 1 from it if there's a remainder.
          */
-        let numRequests = (objectSize / config.targetPartSizeBytes)
+        let numberOfRequests = (objectSize / config.targetPartSizeBytes)
         - (objectSize % config.targetPartSizeBytes == 0 ? 1 : 0)
-        let bucketName = input.getObjectInput.bucket!
 
-        // Size of batch is same as the task limit per bucket.
         let batchSize = concurrentTaskLimitPerBucket
-        for batchStart in stride(from: 0, to: numRequests, by: batchSize) {
-            let batchEnd = min(batchStart + batchSize - 1, numRequests - 1)
+        for batchStart in stride(from: 0, to: numberOfRequests, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize - 1, numberOfRequests - 1)
 
             try await withThrowingTaskGroup(of: (Int, ByteStream).self) { group in
                 // Add child task for each range GET in current batch.
-                for numRequest in batchStart...batchEnd {
+                for requestNum in batchStart...batchEnd {
                     let rangeGetObjectInput = constructRangetGetObjectInput(
-                        endByte, input, numRequest, numRequests, startByte
+                        input, requestNum, objectSize
                     )
                     group.addTask { // Each child task returns (request_number, stream) tuple.
-                        return try await self.withBucketPermission(bucketName: bucketName) {
+                        return try await self.withBucketPermission(bucketName: input.bucket) {
                             try Task.checkCancellation()
                             let rangeGetObjectOutput = try await s3.getObject(input: rangeGetObjectInput)
-                            return (numRequest, rangeGetObjectOutput.body!)
+                            return (requestNum, rangeGetObjectOutput.body!)
                         }
                     }
                 }
 
                 // Write results of range GETs in current batch to `input.outputStream` in order.
-                try await writeBatch(group, to: input.outputStream, batchStart, input, progressTracker)
+                try await writeBatch(group, batchStart, input, progressTracker)
             }
         }
     }
 
     private func constructRangetGetObjectInput(
-        _ endByte: Int?,
         _ input: DownloadObjectInput,
-        _ numRequest: Int,
-        _ numRequests: Int,
-        _ startByte: Int
+        _ requestNum: Int,
+        _ objectSize: Int
     ) -> GetObjectInput {
-        let subRangeStart = startByte + (numRequest * config.targetPartSizeBytes)
+        let subRangeStart = requestNum * config.targetPartSizeBytes
         // End byte is inclusive, so must subtract 1 to get target byte amount.
-        // If `subRangeEnd` exceeds object size for last segment, bc S3 automatically handles that (returns only up to available bytes).
-        var subRangeEnd = subRangeStart + config.targetPartSizeBytes - 1
-        // If it's the last request, we must use `end` if it's non-nil.
-        if let endByte, numRequest + 1 == numRequests { // + 1 bc numRequest is 0-indexed.
-            subRangeEnd = endByte
-        }
-        return input.copyGetObjectInputWithPartNumberOrRange(
-            range: "bytes=\(subRangeStart)-\(subRangeEnd)"
-        )
-    }
-
-    internal func writeData(
-        _ data: Data,
-        to outputStream: OutputStream,
-        _ input: DownloadObjectInput,
-        _ progressTracker: ObjectTransferProgressTracker
-    ) async throws {
-        if outputStream.streamStatus == .notOpen { outputStream.open() }
-        // Write to output stream.
-        let bytesWritten = data.withUnsafeBytes { bufferPointer -> Int in
-            guard let baseAddress = bufferPointer.baseAddress else { return -1 }
-            return outputStream.write(baseAddress.assumingMemoryBound(to: UInt8.self), maxLength: bufferPointer.count)
-        }
-        if bytesWritten < 0 { throw S3TMDownloadObjectError.failedToWriteToOutputStream }
-        let transferredBytes = await progressTracker.addBytes(bytesWritten)
-        input.transferListeners.forEach { $0.onBytesTransferred(
-            input: input,
-            snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
-        )}
-    }
-
-    internal func writeByteStream(
-        _ byteStream: ByteStream,
-        to outputStream: OutputStream,
-        _ input: DownloadObjectInput,
-        _ progressTracker: ObjectTransferProgressTracker
-    ) async throws {
-        guard let data = try await byteStream.readData() else {
-            throw S3TMDownloadObjectError.failedToReadResponseBody
-        }
-        try await writeData(
-            data,
-            to: outputStream,
-            input,
-            progressTracker
+        let subRangeEnd = min(subRangeStart + config.targetPartSizeBytes - 1, objectSize - 1)
+        return input.deriveGetObjectInput(
+            withRange: "bytes=\(subRangeStart)-\(subRangeEnd)"
         )
     }
 
     private func writeBatch(
         _ group: ThrowingTaskGroup<(Int, ByteStream), any Error>,
-        to outputStream: OutputStream,
         _ batchStart: Int,
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker
@@ -366,7 +249,7 @@ public extension S3TransferManager {
         for try await (index, body) in group {
             buffer[index] = body
             while let body = buffer[nextBodyToProcess] {
-                try await writeByteStream(body, to: input.outputStream, input, progressTracker)
+                try await writeByteStream(body, input, progressTracker)
                 // Discard stream after it's written to output stream.
                 buffer.removeValue(forKey: nextBodyToProcess)
                 nextBodyToProcess += 1
@@ -374,44 +257,34 @@ public extension S3TransferManager {
         }
     }
 
-    internal func parseBytesRangeHeader(headerStr: String) throws -> (start: Int, end: Int?) {
-        guard headerStr.hasPrefix("bytes=") else {
-            throw S3TMDownloadObjectError.invalidRangeFormat("Range must begin with \"bytes=\".")
+    internal func writeByteStream(
+        _ byteStream: ByteStream,
+        _ input: DownloadObjectInput,
+        _ progressTracker: ObjectTransferProgressTracker
+    ) async throws {
+        guard let data = try await byteStream.readData() else {
+            throw S3TMDownloadObjectError.failedToReadResponseBody
         }
-
-        let range = headerStr.dropFirst(6)
-        guard !range.hasPrefix("-") else {
-            throw S3TMDownloadObjectError.invalidRangeFormat("Suffix range is not supported.")
-        }
-
-        let parts = range.split(separator: "-", maxSplits: 1)
-        guard parts.count <= 2 else {
-            throw S3TMDownloadObjectError.invalidRangeFormat(
-                "Multi-range value in Range header is not supported by S3."
-            )
-        }
-
-        guard let start = Int(parts[0]) else {
-            throw S3TMDownloadObjectError.invalidRangeFormat("Range start couldn't be parsed to Int!")
-        }
-
-        if parts.count == 1 { // bytes=<start>-
-            return (start, nil)
-        }
-
-        guard let end = Int(parts[1]) else { // bytes=<start>-<end>
-            throw S3TMDownloadObjectError.invalidRangeFormat("Range end couldn't be parsed to Int!")
-        }
-
-        return (start, end)
+        try await writeData(data, input, progressTracker)
     }
 
-    internal func getObjectSizeFromContentRangeHeader(headerStr: String) throws -> Int {
-        let parts = headerStr.split(separator: "/")
-        guard let sizeStr = parts.last, let size = Int(sizeStr) else {
-            throw S3TMDownloadObjectError.failedToDetermineObjectSize
+    internal func writeData(
+        _ data: Data,
+        _ input: DownloadObjectInput,
+        _ progressTracker: ObjectTransferProgressTracker
+    ) async throws {
+        if input.outputStream.streamStatus == .notOpen { input.outputStream.open() }
+        // Write to output stream.
+        let bytesWritten = data.withUnsafeBytes { bufferPointer -> Int in
+            guard let baseAddress = bufferPointer.baseAddress else { return -1 }
+            return input.outputStream.write(baseAddress.assumingMemoryBound(to: UInt8.self), maxLength: bufferPointer.count)
         }
-        return size
+        if bytesWritten < 0 { throw S3TMDownloadObjectError.failedToWriteToOutputStream }
+        let transferredBytes = await progressTracker.addBytes(bytesWritten)
+        input.transferListeners.forEach { $0.onBytesTransferred(
+            input: input,
+            snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
+        )}
     }
 }
 

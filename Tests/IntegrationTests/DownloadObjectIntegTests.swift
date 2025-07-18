@@ -99,153 +99,33 @@ class DownloadObjectIntegTests: XCTestCase {
         region = Self.region
     }
 
-    /*
-        Test all relevant cases below using the `MPU-100MB` and `NonMPU-100MB` objects:
-
-        - Case 0: Specific part number was given. Do a single part GET.
-        - Case 1: Config is part GET with range given. Fallback to single range GET.
-        - Case 2: Config is part GET with no range given. Do a multipart GET with MPU parts.
-        - Case 3: Config is range GET with range given.
-            - Case 3A: Provided range is in "bytes=<start>-<end>" format.
-            - Case 3B: Provided range is in "bytes=<start>-" format.
-        - Case 4: Config is range GET with no range given. Get the entire object (0 - end of entire object) concurrently.
-
-        After download is complete, assert that returned data matches expected data.
-
-        Note: Objects uploaded with a single PutObject has only 1 part, and using `partNumber` 1 with getObject behaves the same as if retrieving the entire object without specifying the `partNumber` in the input.
-     */
-
     // MARK: - downloadObject tests for object originally uploaded using MPU.
 
-    // Case 0.
-    func testDownloadObject_UploadedWithMPU_SinglePartGET() async throws {
+    func testDownloadObject_UploadedWithMPU_MultipartGET() async throws {
         try await runTest(
             withDownloadType: .part,
-            withPartNumber: 13,
             withKey: mpuObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_SinglePartGET",
-            objectDataStart: 100_663_296, // 12 parts * 8 MB part size.
+            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_MultipartGET",
             objectDataEnd: 100 * 1024 * 1024 - 1
         )
     }
 
-    // Case 1.
-    func testDownloadObject_UploadedWithMPU_SingleRangeGET() async throws {
-        try await runTest(
-            withDownloadType: .part,
-            withRange: "bytes=10000000-40000000",
-            withKey: mpuObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_SingleRangeGET",
-            objectDataStart: 10_000_000,
-            objectDataEnd: 40_000_000
-        )
-    }
-
-    // Case 2.
-    func testDownloadObject_UploadedWithMPU_MultipartGET_WithPartNumbers() async throws {
-        try await runTest(
-            withDownloadType: .part,
-            withKey: mpuObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_MultipartGET_WithPartNumbers",
-            objectDataStart: 0,
-            objectDataEnd: 100 * 1024 * 1024 - 1
-        )
-    }
-
-    // Case 3A.
-    func testDownloadObject_UploadedWithMPU_MultipartGET_WithRangeStartAndEnd() async throws {
-        try await runTest(
-            withDownloadType: .range,
-            withRange: "bytes=10000000-40000000",
-            withKey: mpuObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_MultipartGET_WithRangeStartAndEnd",
-            objectDataStart: 10_000_000,
-            objectDataEnd: 40_000_000
-        )
-    }
-
-    // Case 3B.
-    func testDownloadObject_UploadedWithMPU_MultipartGET_WithRangeStart() async throws {
-        try await runTest(
-            withDownloadType: .range,
-            withRange: "bytes=70000000-",
-            withKey: mpuObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_MultipartGET_WithRangeStart",
-            objectDataStart: 70_000_000,
-            objectDataEnd: 100 * 1024 * 1024 - 1
-        )
-    }
-
-    // Case 4.
-    func testDownloadObject_UploadedWithMPU_MultipartGET_WithNoRangeGiven() async throws {
+    func testDownloadObject_UploadedWithMPU_RangeGET() async throws {
         try await runTest(
             withDownloadType: .range,
             withKey: mpuObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_MultipartGET_WithNoRangeGiven",
-            objectDataStart: 0,
+            withFileNamePrefix: "testDownloadObject_UploadedWithMPU_RangeGET",
             objectDataEnd: 100 * 1024 * 1024 - 1
         )
     }
 
     // MARK: - downloadObject tests for object originally uploaded without using MPU.
 
-    // Case 0 -  entire object is 1 part; partNumber 1 used for the test.
-    func testDownloadObject_UploadedWithPutObject_SinglePartGET() async throws {
-        try await runTest(
-            withDownloadType: .part,
-            withPartNumber: 1,
-            withKey: nonMPUObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_SinglePartGET",
-            objectDataStart: 0,
-            objectDataEnd: 100 * 1024 * 1024 - 1
-        )
-    }
-
-    // Case 1.
-    func testDownloadObject_UploadedWithPutObject_SingleRangeGET() async throws {
-        try await runTest(
-            withDownloadType: .part,
-            withRange: "bytes=10000000-40000000",
-            withKey: nonMPUObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_SingleRangeGET",
-            objectDataStart: 10_000_000,
-            objectDataEnd: 40_000_000
-        )
-    }
-
-    /* Case 2 is not applicable. Attempting to retrieve parts with partNumber > 1 results in error. */
-
-    // Case 3A.
-    func testDownloadObject_UploadedWithPutObject_MultipartGET_WithRangeStartAndEnd() async throws {
-        try await runTest(
-            withDownloadType: .range,
-            withRange: "bytes=10000000-40000000",
-            withKey: nonMPUObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_MultipartGET_WithRangeStartAndEnd",
-            objectDataStart: 10_000_000,
-            objectDataEnd: 40_000_000
-        )
-    }
-
-    // Case 3B.
-    func testDownloadObject_UploadedWithPutObject_MultipartGET_WithRangeStart() async throws {
-        try await runTest(
-            withDownloadType: .range,
-            withRange: "bytes=70000000-",
-            withKey: nonMPUObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_MultipartGET_WithRangeStart",
-            objectDataStart: 70_000_000,
-            objectDataEnd: 100 * 1024 * 1024 - 1
-        )
-    }
-
-    // Case 4.
     func testDownloadObject_UploadedWithPutObject_MultipartGET_WithNoRangeGiven() async throws {
         try await runTest(
             withDownloadType: .range,
             withKey: nonMPUObjectKey,
             withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_MultipartGET_WithNoRangeGiven",
-            objectDataStart: 0,
             objectDataEnd: 100 * 1024 * 1024 - 1
         )
     }
@@ -272,11 +152,8 @@ class DownloadObjectIntegTests: XCTestCase {
 
     private func runTest(
         withDownloadType downloadType: MultipartDownloadType,
-        withPartNumber partNumber: Int? = nil,
-        withRange range: String? = nil,
         withKey key: String,
         withFileNamePrefix fileNamePrefix: String,
-        objectDataStart: Int,
         objectDataEnd: Int
     ) async throws {
         // Create an outputstream with provided file name prefix in the temp directory.
@@ -288,8 +165,6 @@ class DownloadObjectIntegTests: XCTestCase {
         // Call runDownloadObject with appropriate arugments
         try await runDownloadObject(
             withDownloadType: downloadType,
-            withPartNumber: partNumber,
-            withRange: range,
             withKey: key,
             withOutputStream: outputStream
         )
@@ -297,7 +172,6 @@ class DownloadObjectIntegTests: XCTestCase {
         // Call validateDownloadedDataAndDeleteFile with appropriate arguments
         try await validateDownloadedDataAndDeleteFile(
             fileURL: fileURL,
-            objectDataStart: objectDataStart,
             objectDataEnd: objectDataEnd
         )
     }
@@ -306,8 +180,6 @@ class DownloadObjectIntegTests: XCTestCase {
     // At the moment of return, all retrieved data is written to the provided `OutputStream`.
     private func runDownloadObject(
         withDownloadType downloadType: MultipartDownloadType,
-        withPartNumber partNumber: Int?,
-        withRange range: String?,
         withKey key: String,
         withOutputStream outputStream: OutputStream
     ) async throws {
@@ -316,25 +188,22 @@ class DownloadObjectIntegTests: XCTestCase {
             multipartDownloadType: downloadType
         )
         let s3tm = S3TransferManager(config: s3tmConfig)
-        let getObjectInput = GetObjectInput(
+        let downloadObjectInput = DownloadObjectInput(
+            outputStream: outputStream,
             bucket: bucketName,
-            key: key,
-            partNumber: partNumber,
-            range: range
+            key: key
         )
-        let downloadObjectInput = DownloadObjectInput(outputStream: outputStream, getObjectInput: getObjectInput)
         _ = try await s3tm.downloadObject(input: downloadObjectInput).value
     }
 
     // Validates data downloaded in the provided file against specific portion of objectData.
     private func validateDownloadedDataAndDeleteFile(
         fileURL: URL,
-        objectDataStart: Int,
         objectDataEnd: Int
     ) async throws {
         let fileHandle = try FileHandle(forReadingFrom: fileURL)
         let actualData = fileHandle.readDataToEndOfFile()
-        let expectedData = objectData[objectDataStart...objectDataEnd]
+        let expectedData = objectData[0...objectDataEnd]
         XCTAssertEqual(actualData, expectedData)
         try fileHandle.close()
         try FileManager.default.removeItem(at: fileURL)
@@ -364,12 +233,12 @@ class DownloadObjectIntegTests: XCTestCase {
         // Create DownloadObject input with an empty destination file.
         let destinationFileURL = FileManager.default.temporaryDirectory.appendingPathComponent("destination-\(uuid)")
         let outputStream = OutputStream(url: destinationFileURL, append: true)!
-        let getObjectInput = GetObjectInput(bucket: bucketName, key: key)
 
         // Call S3TM::DownloadObject & assert on witten file size.
         _ = try await s3tm.downloadObject(input: DownloadObjectInput(
             outputStream: outputStream,
-            getObjectInput: getObjectInput
+            bucket: bucketName,
+            key: key
         )).value
         let destinationFileHandle = try FileHandle(forReadingFrom: destinationFileURL)
         let actualFileLength = try destinationFileHandle.seekToEnd()

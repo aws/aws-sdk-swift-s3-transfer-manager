@@ -30,7 +30,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on directory transfer status and progress.
     public let directoryTransferListeners: [DownloadBucketTransferListener]
     /// The transfer listener factory closure called by `S3TransferManager` to create listeners for individual object transfer. Use to track download status and progress of individual objects in the bucket.
-    public let objectTransferListenerFactory: @Sendable (GetObjectInput) async -> [DownloadObjectTransferListener]
+    public let objectTransferListenerFactory: @Sendable () async -> [DownloadObjectTransferListener]
 
     /// Initializes `DownloadBucketInput` with provided parameters.
     ///
@@ -56,9 +56,9 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         failurePolicy: @escaping FailurePolicy<DownloadBucketInput> = CannedFailurePolicy
             .rethrowExceptionToTerminateRequest(),
         directoryTransferListeners: [DownloadBucketTransferListener] = [],
-        objectTransferListenerFactory: @Sendable @escaping (
-            GetObjectInput
-        ) async -> [DownloadObjectTransferListener] = { _ in [] }
+        objectTransferListenerFactory: @Sendable @escaping () async -> [DownloadObjectTransferListener] = {
+            []
+        }
     ) {
         self.bucket = bucket
         self.destination = destination

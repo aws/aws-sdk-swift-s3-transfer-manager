@@ -9,6 +9,7 @@ import AWSClientRuntime
 import AWSS3
 import ClientRuntime
 import SmithyHTTPAPI
+import AWSSDKChecksums
 
 /// The config object for `S3TransferManager`.
 public class S3TransferManagerConfig {
@@ -20,10 +21,10 @@ public class S3TransferManagerConfig {
     let targetPartSizeBytes: Int
     /// The threshold for multipart uploads. All files bigger than this threshold will be uploaded using S3's multipart upload API.
     let multipartUploadThresholdBytes: Int
-    /// The flag for whether to perform checksum validation or not on the `downloadBucket` operations.
-    let checksumValidationEnabled: Bool
-    /// The checksum algorithm to use for the `uploadDirectory` operations.
-    let checksumAlgorithm: S3ClientTypes.ChecksumAlgorithm
+    /// Specifies when a checksum will be calculated for request. This takes precendence over the value in `s3ClientConfig`.
+    let requestChecksumCalculation: AWSChecksumCalculationMode
+    /// Specifies when a checksum validation will be performed on response. This takes precendence over the value in `s3ClientConfig`.
+    let responseChecksumValidation: AWSChecksumCalculationMode
     /// The multipart download type to use for the `downloadObject` and `downloadBucket` operations.
     let multipartDownloadType: MultipartDownloadType
 
@@ -33,15 +34,15 @@ public class S3TransferManagerConfig {
     ///    - s3ClientConfig: The S3 client config instance used to instantiate the S3 client used by the transfer manager. If not provided, a default S3 client config is used to create the underlying S3 client.
     ///    - targetPartSizeBytes: The part size used by multipart operations. The last part can be smaller. Default value is 8MB.
     ///    - multipartUploadThresholdBytes: The threshold at which multipart operations get used instead of a single `putObject` for the `uploadObject` operation. Default value is 16MB.
-    ///    - checksumValidationEnabled: Specifies whether or not the checksum should be validated for the `downloadBucket` operation. Checksum of each downloaded object is validated only if the object was originally uploaded with MPU with partial checksums AND part GET was used with `downloadObject`. Your checksum behavior configuration on the `s3Client` influences the checksum validation behavior as well. Default value is `true`.
-    ///    - checksumAlgorithm: Specifies the checksum algorithm to use for the `uploadDirectory` operation. Default algorithm is CRC32.
+    ///    - requestChecksumCalculation: Specifies when checksum should be calculated for requests (e.g., upload operations). This value overrides the value provided in `s3ClientConfig`. Default value is `.whenSupported`, which means transfer manager will automatically calculate checksum in absence of full object checksum in operation input.
+    ///    - responseChecksumValidation: Specifies when checksm should be validated for responses (e.g., download operations). This value overrides the value provided in `s3ClientConfig`. Default value is `.whenSupported`, which means transfer manager will automatically calculate checksum and validate it against checksum returned in the response.
     ///    - multipartDownloadType: Specifies the behavior of multipart download operations. Default value is `.part`, which configures individual `getObject` calls to use part numbers for multipart downloads. The other option is `.range`, which uses the byte range of the S3 object for multipart downloads. If what you want to download was uploaded without using multipart upload (therefore there's no part number available), then you should use `.range`.
     public init(
         s3ClientConfig: S3Client.S3ClientConfiguration? = nil,
         targetPartSizeBytes: Int = 8 * 1024 * 1024,
         multipartUploadThresholdBytes: Int = 16 * 1024 * 1024,
-        checksumValidationEnabled: Bool = true,
-        checksumAlgorithm: S3ClientTypes.ChecksumAlgorithm = .crc32,
+        requestChecksumCalculation: AWSChecksumCalculationMode = .whenSupported,
+        responseChecksumValidation: AWSChecksumCalculationMode = .whenSupported,
         multipartDownloadType: MultipartDownloadType = .part
     ) async throws {
         // If no client config was provided, initialize a default client config.
@@ -50,12 +51,21 @@ public class S3TransferManagerConfig {
         } else {
             self.s3ClientConfig = try await S3Client.S3ClientConfiguration()
         }
+        // Override checksum behavior configurations in passed in `s3ClientConfig` with
+        //  checksum behavior configurations passed directly to TM.
+        self.s3ClientConfig.requestChecksumCalculation = requestChecksumCalculation
+        self.s3ClientConfig.responseChecksumValidation = responseChecksumValidation
+
+        // Add intercpetor that injects [S3_TRANSFER : G] feature ID to requests.
         self.s3ClientConfig.addInterceptorProvider(_S3TransferManagerInterceptorProvider())
+
+        // Instantiate the shared S3 client instance.
         self.s3Client = S3Client(config: self.s3ClientConfig)
+
         self.targetPartSizeBytes = targetPartSizeBytes
         self.multipartUploadThresholdBytes = multipartUploadThresholdBytes
-        self.checksumValidationEnabled = checksumValidationEnabled
-        self.checksumAlgorithm = checksumAlgorithm
+        self.requestChecksumCalculation = requestChecksumCalculation
+        self.responseChecksumValidation = responseChecksumValidation
         self.multipartDownloadType = multipartDownloadType
     }
 }

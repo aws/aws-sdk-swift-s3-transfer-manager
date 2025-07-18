@@ -21,8 +21,8 @@ public struct DownloadObjectLoggingTransferListener: DownloadObjectTransferListe
         snapshot: SingleObjectTransferProgressSnapshot
     ) {
         let message = "Transfer started. "
-        + "Object key: \"\(input.getObjectInput.key!)\". "
-        + "Source bucket: \"\(input.getObjectInput.bucket!)\"."
+        + "Object key: \"\(input.key)\". "
+        + "Source bucket: \"\(input.bucket)\"."
         log(input.id, message)
     }
 

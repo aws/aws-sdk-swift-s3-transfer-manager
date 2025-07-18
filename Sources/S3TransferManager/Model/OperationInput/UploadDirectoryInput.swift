@@ -32,7 +32,7 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on directory transfer status and progress.
     public let directoryTransferListeners: [UploadDirectoryTransferListener]
     /// The transfer listener factory closure called by `S3TransferManager` to create listeners for individual object transfer. Use to upload status and progress of individual objects in the directory.
-    public let objectTransferListenerFactory: @Sendable (PutObjectInput) async -> [UploadObjectTransferListener]
+    public let objectTransferListenerFactory: @Sendable () async -> [UploadObjectTransferListener]
 
     /// Initializes `UploadDirectoryInput` with provided parameters.
     ///
@@ -60,9 +60,9 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         failurePolicy: @escaping FailurePolicy<UploadDirectoryInput> = CannedFailurePolicy
             .rethrowExceptionToTerminateRequest(),
         directoryTransferListeners: [UploadDirectoryTransferListener] = [],
-        objectTransferListenerFactory: @Sendable @escaping (
-            PutObjectInput
-        ) async -> [UploadObjectTransferListener] = { _ in [] }
+        objectTransferListenerFactory: @Sendable @escaping () async -> [UploadObjectTransferListener] = {
+            []
+        }
     ) throws {
         self.bucket = bucket
         self.source = source

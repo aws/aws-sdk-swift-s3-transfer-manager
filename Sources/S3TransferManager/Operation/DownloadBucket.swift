@@ -31,7 +31,7 @@ public extension S3TransferManager {
 
             do {
                 let objectKeyToCreatedFileURLMap = try await setupDestinations(input, config.s3Client)
-                try await withThrowingTaskGroup(of: Void.self) { group in
+                await withThrowingTaskGroup(of: Void.self) { group in
                     // Add `downloadObject` child tasks.
                     var downloadObjectOperationNum = 1
                     for pair in objectKeyToCreatedFileURLMap {
@@ -238,17 +238,13 @@ public extension S3TransferManager {
         guard let outputStream = OutputStream(url: pair.value, append: true) else {
             throw S3TMDownloadBucketError.FailedToCreateOutputStreamForFileURL(url: pair.value)
         }
-        let getObjectInput = GetObjectInput(
-            bucket: input.bucket,
-            // User must've set `s3Client.config.responseChecksumValidation` to `.whenRequired` as well to disable response checksum validation.
-            checksumMode: config.checksumValidationEnabled ? .enabled : .sdkUnknown("DISABLED"),
-            key: pair.key
-        )
         let downloadObjectInput = DownloadObjectInput(
             id: input.id + "-\(operationNumber)",
             outputStream: outputStream,
-            getObjectInput: getObjectInput,
-            transferListeners: await input.objectTransferListenerFactory(getObjectInput)
+            bucket: input.bucket,
+            checksumMode: config.responseChecksumValidation == .whenSupported ? .enabled : .sdkUnknown("DISABLED"),
+            key: pair.key,
+            transferListeners: await input.objectTransferListenerFactory()
         )
         do {
             // Create S3TM `downloadObject` task and await its completion before returning.

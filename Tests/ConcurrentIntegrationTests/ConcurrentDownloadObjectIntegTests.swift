@@ -113,10 +113,8 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
                 group.addTask {
                     _ = try await self.tm.downloadObject(input: DownloadObjectInput(
                         outputStream: OutputStream(url: self.fileURLs[fileNum]!, append: true)!,
-                        getObjectInput: GetObjectInput(
-                            bucket: self.bucketName,
-                            key: "\(self.fileNamePrefix)\(fileNum)"
-                        )
+                        bucket: self.bucketName,
+                        key: "\(self.fileNamePrefix)\(fileNum)"
                     )).value
                 }
             }

@@ -23,6 +23,8 @@ public struct DownloadObjectOutput: Sendable {
     public let checksumCRC32: Swift.String?
     /// The base64-encoded, 32-bit CRC-32C checksum of the object. This will only be present if it was uploaded with the object. For more information, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html) in the Amazon S3 User Guide.
     public let checksumCRC32C: Swift.String?
+    /// The Base64 encoded, 64-bit CRC64NVME checksum of the object. For more information, see [Checking object integrity in the Amazon S3 User Guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html).
+    public var checksumCRC64NVME: String?
     /// The base64-encoded, 160-bit SHA-1 digest of the object. This will only be present if it was uploaded with the object. For more information, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html) in the Amazon S3 User Guide.
     public let checksumSHA1: Swift.String?
     /// The base64-encoded, 256-bit SHA-256 digest of the object. This will only be present if it was uploaded with the object. For more information, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html) in the Amazon S3 User Guide.
@@ -96,6 +98,7 @@ public struct DownloadObjectOutput: Sendable {
         self.cacheControl = getObjectOutput.cacheControl
         self.checksumCRC32 = getObjectOutput.checksumCRC32
         self.checksumCRC32C = getObjectOutput.checksumCRC32C
+        self.checksumCRC64NVME = getObjectOutput.checksumCRC64NVME
         self.checksumSHA1 = getObjectOutput.checksumSHA1
         self.checksumSHA256 = getObjectOutput.checksumSHA256
         self.checksumType = getObjectOutput.checksumType

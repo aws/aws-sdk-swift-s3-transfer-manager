@@ -94,12 +94,6 @@ public struct UploadObjectInput: Sendable, Identifiable {
             bucket: putObjectInput.bucket,
             // Determine checksum algorithm to use by what's provided in `self.putObjectInput`.
             checksumAlgorithm: resolveChecksumAlgorithmForCreateMPUInput(putObjectInput),
-            checksumCRC32: putObjectInput.checksumCRC32,
-            checksumCRC32C: putObjectInput.checksumCRC32C,
-            checksumSHA1: putObjectInput.checksumSHA1,
-            checksumSHA256: putObjectInput.checksumSHA256,
-            contentLength: putObjectInput.contentLength,
-            contentMD5: putObjectInput.contentMD5,
             expectedBucketOwner: putObjectInput.expectedBucketOwner,
             key: putObjectInput.key,
             partNumber: partNumber,
@@ -120,6 +114,7 @@ public struct UploadObjectInput: Sendable, Identifiable {
             bucket: putObjectInput.bucket,
             checksumCRC32: putObjectInput.checksumCRC32,
             checksumCRC32C: putObjectInput.checksumCRC32C,
+            checksumCRC64NVME: putObjectInput.checksumCRC64NVME,
             checksumSHA1: putObjectInput.checksumSHA1,
             checksumSHA256: putObjectInput.checksumSHA256,
             // Determine `checksumType` by what's provided in `self.putObjectInput`.
@@ -161,14 +156,13 @@ public struct UploadObjectInput: Sendable, Identifiable {
         // Follow the algorithm priority in `smithy-swift/Sources/SmithyChecksums/ChecksumAlgorithm.swift`.
         if putObjectInput.checksumCRC32C != nil {
             return .crc32c
-        }
-        if putObjectInput.checksumCRC32 != nil {
+        } else if putObjectInput.checksumCRC32 != nil {
             return .crc32
-        }
-        if putObjectInput.checksumSHA1 != nil {
+        } else if putObjectInput.checksumCRC64NVME != nil {
+            return .crc64nvme
+        } else if putObjectInput.checksumSHA1 != nil {
             return .sha1
-        }
-        if putObjectInput.checksumSHA256 != nil {
+        } else if putObjectInput.checksumSHA256 != nil {
             return .sha256
         }
         // If no checksum hash nor checksum algorithm was configured, return CRC32.
