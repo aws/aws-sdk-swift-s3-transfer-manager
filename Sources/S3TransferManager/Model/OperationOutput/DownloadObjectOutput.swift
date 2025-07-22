@@ -92,21 +92,24 @@ public struct DownloadObjectOutput: Sendable {
     /// If the bucket is configured as a website, redirects requests for this object to another object in the same bucket or to an external URL. Amazon S3 stores the value of this header in the object metadata. This functionality is not supported for directory buckets.
     public let websiteRedirectLocation: Swift.String?
 
-    init(getObjectOutput: GetObjectOutput) {
+    init(getObjectOutput: GetObjectOutput, objectSize: Int) {
         self.acceptRanges = getObjectOutput.acceptRanges
         self.bucketKeyEnabled = getObjectOutput.bucketKeyEnabled
         self.cacheControl = getObjectOutput.cacheControl
-        self.checksumCRC32 = getObjectOutput.checksumCRC32
-        self.checksumCRC32C = getObjectOutput.checksumCRC32C
-        self.checksumCRC64NVME = getObjectOutput.checksumCRC64NVME
-        self.checksumSHA1 = getObjectOutput.checksumSHA1
-        self.checksumSHA256 = getObjectOutput.checksumSHA256
+        // Set full object checksum in response only if checksum type is full object.
+        let ct = getObjectOutput.checksumType
+        self.checksumCRC32 = ct == .fullObject ? getObjectOutput.checksumCRC32 : nil
+        self.checksumCRC32C = ct == .fullObject ? getObjectOutput.checksumCRC32C : nil
+        self.checksumCRC64NVME = ct == .fullObject ? getObjectOutput.checksumCRC64NVME : nil
+        self.checksumSHA1 = ct == .fullObject ? getObjectOutput.checksumSHA1 : nil
+        self.checksumSHA256 = ct == .fullObject ? getObjectOutput.checksumSHA256 : nil
         self.checksumType = getObjectOutput.checksumType
         self.contentDisposition = getObjectOutput.contentDisposition
         self.contentEncoding = getObjectOutput.contentEncoding
         self.contentLanguage = getObjectOutput.contentLanguage
-        self.contentLength = getObjectOutput.contentLength
-        self.contentRange = getObjectOutput.contentRange
+        // Set final TM operation output content length & content range to full object size & bytes range.
+        self.contentLength = objectSize
+        self.contentRange = "bytes 0-\(objectSize - 1)/\(objectSize)"
         self.contentType = getObjectOutput.contentType
         self.deleteMarker = getObjectOutput.deleteMarker
         self.eTag = getObjectOutput.eTag

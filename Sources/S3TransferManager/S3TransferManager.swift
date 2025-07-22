@@ -93,13 +93,27 @@ internal extension S3TransferManager {
     }
 
     // An actor used to keep track of number of transferred bytes in single object transfer operations.
+    // For downloadObject operation, it's used to keep track of number of partial downloads after
+    //  the initial triage GetObject request. It counts either number of parts for part GETs or number of
+    //  requests for range GETs.
     actor ObjectTransferProgressTracker {
         var transferredBytes = 0
+        var partialDownloadCount = 0
 
         // Adds newly transferred bytes & returns the new value.
         func addBytes(_ bytes: Int) -> Int {
             transferredBytes += bytes
             return transferredBytes
+        }
+
+        // Functions that keep track of download part / range requests.
+
+        func incrementPartialDownloadCount() {
+            partialDownloadCount += 1
+        }
+
+        func getPartialDownloadCount() -> Int {
+            return partialDownloadCount
         }
     }
 }

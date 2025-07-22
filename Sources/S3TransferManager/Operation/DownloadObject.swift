@@ -86,24 +86,32 @@ public extension S3TransferManager {
         _ progressTracker: ObjectTransferProgressTracker,
         _ s3: S3Client
     ) async throws -> DownloadObjectOutput {
-        let triageGETInput = input.deriveGetObjectInput(withPartNumber: 1)
+        let triageGETInput = input.deriveGetObjectInput(
+            responseChecksumValidation: self.config.responseChecksumValidation,
+            withPartNumber: 1
+        )
         let triageGETOutput = try await triageGetObject(input, triageGETInput, progressTracker, s3)
+        let objectSize = try determineObjectSize(triageGETOutput)
 
         // Return if there's no more parts.
         guard let totalParts = triageGETOutput.partsCount, totalParts > 1 else {
-            return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+            return try await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker, objectSize)
         }
 
         // Otherwise, fetch all remaining parts and write to the output stream. Then return.
-        try await downloadRemainingParts(input, progressTracker, s3, totalParts)
-        return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+        // Use eTag value from triage response as ifMatch value in all subsequent requests for durability.
+        let eTag = triageGETOutput.eTag
+        try await getRemainingObjectWithPartNumbers(input, progressTracker, s3, totalParts, eTag, objectSize)
+        return try await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker, objectSize)
     }
 
-    private func downloadRemainingParts(
+    private func getRemainingObjectWithPartNumbers(
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker,
         _ s3: S3Client,
-        _ totalParts: Int
+        _ totalParts: Int,
+        _ eTagFromTriageGetObjectResponse: String?,
+        _ objectSize: Int
     ) async throws {
         let batchSize = concurrentTaskLimitPerBucket
 
@@ -118,9 +126,12 @@ public extension S3TransferManager {
                         return try await self.withBucketPermission(bucketName: input.bucket) {
                             try Task.checkCancellation()
                             let partGetObjectInput = input.deriveGetObjectInput(
+                                responseChecksumValidation: self.config.responseChecksumValidation,
+                                eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
                                 withPartNumber: partNumber
                             )
                             let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
+                            await progressTracker.incrementPartialDownloadCount()
                             return (partNumber, partGetObjectOutput.body!)
                         }
                     }
@@ -129,6 +140,16 @@ public extension S3TransferManager {
                 // Write results of part GETs in current batch to `input.outputStream` in order.
                 try await writeBatch(group, batchStart, input, progressTracker)
             }
+        }
+
+        // Check that the number of parts downloaded is as expected.
+        let actualDownloadedPartsCount = await progressTracker.getPartialDownloadCount()
+        // Actual number of parts downloaded by the end of this function must be totalParts - 1 because
+        //  the triage getObject downloaded the first part.
+        guard actualDownloadedPartsCount == totalParts - 1 else {
+            throw S3TMDownloadObjectError.unexpectedNumberOfRangedGetObjectCalls(
+                expected: totalParts, actual: actualDownloadedPartsCount + 1
+            )
         }
     }
 
@@ -140,6 +161,7 @@ public extension S3TransferManager {
         // End is inclusive, so must subtract 1 to get target byte amount.
         // E.g., "bytes=0-499" returns 500 bytes.
         let triageGETInput = input.deriveGetObjectInput(
+            responseChecksumValidation: self.config.responseChecksumValidation,
             withRange: "bytes=0-\(config.targetPartSizeBytes - 1)"
         )
         let triageGETOutput = try await triageGetObject(input, triageGETInput, progressTracker, s3)
@@ -148,13 +170,14 @@ public extension S3TransferManager {
 
         // Return if one range GET was enough to get everything.
         if objectSize <= config.targetPartSizeBytes {
-            return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+            return try await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker, objectSize)
         }
 
         // Otherwise, fetch all remaining segments and write to the output stream.
-        try await getRemainingObjectWithRangedGETs(input, objectSize, progressTracker, s3)
-
-        return await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker)
+        // Use eTag value from triage response as ifMatch value in all subsequent requests for durability.
+        let eTag = triageGETOutput.eTag
+        try await getRemainingObjectWithByteRanges(input, objectSize, progressTracker, s3, eTag)
+        return try await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker, objectSize)
     }
 
     private func determineObjectSize(
@@ -174,9 +197,13 @@ public extension S3TransferManager {
     private func publishTransferCompleteAndReturnOutput(
         _ firstGetObjectOutput: GetObjectOutput,
         _ input: DownloadObjectInput,
-        _ progressTracker: ObjectTransferProgressTracker
-    ) async -> DownloadObjectOutput {
-        let downloadObjectOutput = DownloadObjectOutput(getObjectOutput: firstGetObjectOutput)
+        _ progressTracker: ObjectTransferProgressTracker,
+        _ objectSize: Int
+    ) async throws -> DownloadObjectOutput {
+        let downloadObjectOutput = DownloadObjectOutput(
+            getObjectOutput: firstGetObjectOutput,
+            objectSize: objectSize
+        )
         let transferredBytes = await progressTracker.transferredBytes
         input.transferListeners.forEach { $0.onTransferComplete(
             input: input,
@@ -186,11 +213,12 @@ public extension S3TransferManager {
         return downloadObjectOutput
     }
 
-    private func getRemainingObjectWithRangedGETs(
+    private func getRemainingObjectWithByteRanges(
         _ input: DownloadObjectInput,
         _ objectSize: Int,
         _ progressTracker: ObjectTransferProgressTracker,
-        _ s3: S3Client
+        _ s3: S3Client,
+        _ eTagFromTriageGetObjectResponse: String?
     ) async throws {
         /*
             Must subtract 1 if there was no remainder, since we already sent a "triage" request that doubled as getting the object size. E.g., say `objectSize` is 100 and part size is 10. We have 90 more bytes to fetch at this point. 100 / 10 = 10. Subtract 1 to get 9, which is the remaining number of requests we need to make. Now, say object size is 103 and part size is 10. We have 93 more bytes to fetch. We need to make 10 requests to get all 93 bytes (9 x 10 byte requests, and 10th request with 3 bytes). 100 / 10 = 10. So we don't subtract 1 from it if there's a remainder.
@@ -206,12 +234,13 @@ public extension S3TransferManager {
                 // Add child task for each range GET in current batch.
                 for requestNum in batchStart...batchEnd {
                     let rangeGetObjectInput = constructRangetGetObjectInput(
-                        input, requestNum, objectSize
+                        input, requestNum, objectSize, eTagFromTriageGetObjectResponse
                     )
                     group.addTask { // Each child task returns (request_number, stream) tuple.
                         return try await self.withBucketPermission(bucketName: input.bucket) {
                             try Task.checkCancellation()
                             let rangeGetObjectOutput = try await s3.getObject(input: rangeGetObjectInput)
+                            await progressTracker.incrementPartialDownloadCount()
                             return (requestNum, rangeGetObjectOutput.body!)
                         }
                     }
@@ -221,17 +250,28 @@ public extension S3TransferManager {
                 try await writeBatch(group, batchStart, input, progressTracker)
             }
         }
+
+        // Check that the number of range requests made is as expected.
+        let actualRequestCount = await progressTracker.getPartialDownloadCount()
+        guard actualRequestCount == numberOfRequests else {
+            throw S3TMDownloadObjectError.unexpectedNumberOfRangedGetObjectCalls(
+                expected: numberOfRequests, actual: actualRequestCount
+            )
+        }
     }
 
     private func constructRangetGetObjectInput(
         _ input: DownloadObjectInput,
         _ requestNum: Int,
-        _ objectSize: Int
+        _ objectSize: Int,
+        _ eTagFromTriageGetObjectResponse: String?
     ) -> GetObjectInput {
         let subRangeStart = requestNum * config.targetPartSizeBytes
         // End byte is inclusive, so must subtract 1 to get target byte amount.
         let subRangeEnd = min(subRangeStart + config.targetPartSizeBytes - 1, objectSize - 1)
         return input.deriveGetObjectInput(
+            responseChecksumValidation: self.config.responseChecksumValidation,
+            eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
             withRange: "bytes=\(subRangeStart)-\(subRangeEnd)"
         )
     }
@@ -298,4 +338,6 @@ public enum S3TMDownloadObjectError: Error {
     case invalidDownloadConfiguration
     case failedToWriteToOutputStream
     case invalidRangeFormat(String)
+    case unexpectedNumberOfRangedGetObjectCalls(expected: Int, actual: Int)
+    case unexpectedNumberOfPartNumberGetObjectCalls(expected: Int, actual: Int)
 }

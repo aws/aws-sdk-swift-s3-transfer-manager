@@ -9,6 +9,7 @@ import AWSS3
 import class Foundation.OutputStream
 import struct Foundation.UUID
 import struct Foundation.Date
+import enum AWSSDKChecksums.AWSChecksumCalculationMode
 
 /// The synthetic input type for the `downloadObject` operation of `S3TransferManager`.
 public struct DownloadObjectInput: @unchecked Sendable, Identifiable {
@@ -173,14 +174,19 @@ public struct DownloadObjectInput: @unchecked Sendable, Identifiable {
     // MARK: - Internal helper functions for converting / transforming input(s).
 
     func deriveGetObjectInput(
+        responseChecksumValidation: AWSChecksumCalculationMode,
+        eTagFromTriageGetObjectResponse: String? = nil,
         withPartNumber: Int? = nil,
         withRange: String? = nil
     ) -> GetObjectInput {
         return GetObjectInput(
             bucket: self.bucket,
-            checksumMode: self.checksumMode,
+            // Resolve response checksum mode based on current input & TM config.
+            checksumMode: resolveChecksumMode(responseChecksumValidation),
             expectedBucketOwner: self.expectedBucketOwner,
-            ifMatch: self.ifMatch,
+            // Use eTag from triage GetObject response unless user explicitly specified a value.
+            // Enhances durability.
+            ifMatch: self.ifMatch ?? eTagFromTriageGetObjectResponse,
             ifModifiedSince: self.ifModifiedSince,
             ifNoneMatch: self.ifNoneMatch,
             ifUnmodifiedSince: self.ifUnmodifiedSince,
@@ -199,5 +205,14 @@ public struct DownloadObjectInput: @unchecked Sendable, Identifiable {
             sseCustomerKeyMD5: self.sseCustomerKeyMD5,
             versionId: self.versionId
         )
+    }
+
+    func resolveChecksumMode(
+        _ responseChecksumValidation: AWSChecksumCalculationMode
+    ) -> S3ClientTypes.ChecksumMode {
+        if self.checksumMode == .enabled || responseChecksumValidation == .whenSupported {
+            return .enabled
+        }
+        return .sdkUnknown("DISABLED")
     }
 }
