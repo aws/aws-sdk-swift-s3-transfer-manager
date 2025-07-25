@@ -9,6 +9,14 @@ import AWSS3
 import class Foundation.FileManager
 import class Foundation.OutputStream
 import struct Foundation.URL
+import struct Foundation.UUID
+
+// Imports the rename C-functino which atomically renames AND overwrites file if needed.
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+import Darwin
+#elseif os(Linux)
+import Glibc
+#endif
 
 public extension S3TransferManager {
     /// Downloads S3 bucket to a local directory.
@@ -29,8 +37,9 @@ public extension S3TransferManager {
             // Concurrency-safe storage for results of `downloadObject` child tasks.
             let results = Results()
 
+            var objectKeyToCreatedFileURLMap: [String:URL] = [:]
             do {
-                let objectKeyToCreatedFileURLMap = try await setupDestinations(input, config.s3Client)
+                objectKeyToCreatedFileURLMap = try await setupDestinations(input, config.s3Client)
                 await withThrowingTaskGroup(of: Void.self) { group in
                     // Add `downloadObject` child tasks.
                     var downloadObjectOperationNum = 1
@@ -50,6 +59,10 @@ public extension S3TransferManager {
                 return await processResultsAndGetOutput(input, results)
             } catch {
                 await processResultsBeforeThrowing(error, input, results)
+                // Delete all temporary files.
+                cleanupTempFilesBeforeThrowingError(
+                    urls: objectKeyToCreatedFileURLMap.values.map { $0 }
+                )
                 throw error
             }
         }
@@ -215,19 +228,72 @@ public extension S3TransferManager {
     ) throws -> [String: URL] {
         var objectKeyToCreatedURLMapping: [String: URL] = [:]
         for pair in keyToResolvedURLMapping {
-            let destinationPath = pair.value.standardizedFileURL.path
-            // Check if a file already exists at destinationURL.
-            if FileManager.default.fileExists(atPath: destinationPath) {
-                // Skip this object if there's duplicate.
-                logger.debug("Skipping object with key \(pair.key) that resolves to location previously processed.")
-                continue
-            } else {
-                try createFile(at: URL(fileURLWithPath: destinationPath))
+            let s3ObjectKey = pair.key
+            let urlResolvedFromS3ObjKey = pair.value
+
+            // Generate temp URL with `.s3tmp.<8-char-uniqueID` suffix in file name before type extension.
+            var tempURLWithUniqueID = constructTempFileURL(originalURL: urlResolvedFromS3ObjKey)
+            var tempDestinationPath = tempURLWithUniqueID.standardizedFileURL.path
+            // Check & regenerate unique ID if a file already exists at destinationURL.
+            while FileManager.default.fileExists(atPath: tempDestinationPath) {
+                tempURLWithUniqueID = constructTempFileURL(originalURL: urlResolvedFromS3ObjKey)
+                tempDestinationPath = tempURLWithUniqueID.standardizedFileURL.path
             }
+            try createFile(at: URL(fileURLWithPath: tempDestinationPath))
             // Save the created file URL mapping.
-            objectKeyToCreatedURLMapping[pair.key] = pair.value
+            objectKeyToCreatedURLMapping[s3ObjectKey] = tempURLWithUniqueID
         }
         return objectKeyToCreatedURLMapping
+    }
+
+    internal func constructTempFileURL(originalURL: URL) -> URL {
+        let directory = originalURL.deletingLastPathComponent()
+        let filename = originalURL.deletingPathExtension().lastPathComponent
+        let ext = originalURL.pathExtension
+
+        let uniqueSuffix = String(UUID().uuidString.prefix(8))
+        let tempFilename = "\(filename).s3tmp.\(uniqueSuffix)"
+
+        let finalFilename = ext.isEmpty ? tempFilename : "\(tempFilename).\(ext)"
+        return directory.appendingPathComponent(finalFilename)
+    }
+
+    internal func deconstructTempFileURL(tempFileURL: URL) -> URL {
+        let directory = tempFileURL.deletingLastPathComponent()
+        let filename = tempFileURL.deletingPathExtension().lastPathComponent
+        let ext = tempFileURL.pathExtension
+
+        // Look for ".s3tmp." in the filename.
+        if let range = filename.range(of: ".s3tmp.") {
+            let suffixStart = filename[range.upperBound...]
+            if suffixStart.count <= 8 {
+                let baseFilename = String(filename[..<range.lowerBound])
+                let finalFilename = ext.isEmpty ? baseFilename : "\(baseFilename).\(ext)"
+                return directory.appendingPathComponent(finalFilename)
+            }
+        }
+
+        // Not a temp file — return as is.
+        return tempFileURL
+    }
+
+    func atomicRenameWithOverwrite(
+        from wipURL: URL,
+        to finishedURL: URL,
+        operationID: String
+    ) {
+        // Remove .s3tmp.<8-char-unique-ID> suffix from temp URL to finalize download.
+        let result = wipURL.withUnsafeFileSystemRepresentation { wipFSR in
+            finishedURL.withUnsafeFileSystemRepresentation { finishedFSR in
+                return rename(wipFSR, finishedFSR)
+            }
+        }
+        if result != 0 { // If rename failed:
+            // Log the error before cleanup
+            logger.debug("Failed to rename \(wipURL.path) to \(finishedURL.path) for DownloadObject call with operation ID \(operationID).")
+            // Attempt to delete the temporary file.
+            try? FileManager.default.removeItem(at: wipURL)
+        }
     }
 
     private func downloadSingleObject(
@@ -238,8 +304,9 @@ public extension S3TransferManager {
         guard let outputStream = OutputStream(url: pair.value, append: true) else {
             throw S3TMDownloadBucketError.FailedToCreateOutputStreamForFileURL(url: pair.value)
         }
+        let operationID = input.id + "-\(operationNumber)"
         let downloadObjectInput = DownloadObjectInput(
-            id: input.id + "-\(operationNumber)",
+            id: operationID,
             outputStream: outputStream,
             bucket: input.bucket,
             checksumMode: config.responseChecksumValidation == .whenSupported ? .enabled : .sdkUnknown("DISABLED"),
@@ -250,6 +317,12 @@ public extension S3TransferManager {
             // Create S3TM `downloadObject` task and await its completion before returning.
             let downloadObjectTask = try downloadObject(input: downloadObjectInput)
             _ = try await downloadObjectTask.value
+            // Finalize the file by removing the temporary suffix .s3tmp.<8-char-ID> from the filename in an atomic rename operation.
+            atomicRenameWithOverwrite(
+                from: pair.value,
+                to: deconstructTempFileURL(tempFileURL: pair.value),
+                operationID: operationID
+            )
         } catch {
             // Upon failure, wrap the original error and the input in the synthetic error and throw.
             throw S3TMDownloadBucketError.FailedToDownloadAnObject(
@@ -289,6 +362,19 @@ public extension S3TransferManager {
         }
 
         fileManager.createFile(atPath: url.path, contents: nil)
+    }
+
+    func cleanupTempFilesBeforeThrowingError(urls: [URL]) {
+        let fileManager = FileManager.default
+        for url in urls {
+            if fileManager.fileExists(atPath: url.path) {
+                do {
+                    try fileManager.removeItem(at: url)
+                } catch {
+                    logger.debug("Failed to delete temporary file at \(url): \(error)")
+                }
+            }
+        }
     }
 }
 

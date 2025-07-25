@@ -25,6 +25,9 @@ public extension S3TransferManager {
                 input: input,
                 snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: 0)
             )}
+            // Deallocating buffer used by stream if stream was created with OutputStream(toBuffer:capacity:)
+            //  is the responsibility of API user, as OutputStream does not expose a way to tell how it was created
+            //  after the fact. So we just close the stream here.
             defer { input.outputStream.close() }
 
             let progressTracker = ObjectTransferProgressTracker()
