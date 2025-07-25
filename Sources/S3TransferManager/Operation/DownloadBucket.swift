@@ -37,7 +37,7 @@ public extension S3TransferManager {
             // Concurrency-safe storage for results of `downloadObject` child tasks.
             let results = Results()
 
-            var objectKeyToCreatedFileURLMap: [String:URL] = [:]
+            var objectKeyToCreatedFileURLMap: [String: URL] = [:]
             do {
                 objectKeyToCreatedFileURLMap = try await setupDestinations(input, config.s3Client)
                 await withThrowingTaskGroup(of: Void.self) { group in
@@ -290,7 +290,10 @@ public extension S3TransferManager {
         }
         if result != 0 { // If rename failed:
             // Log the error before cleanup
-            logger.debug("Failed to rename \(wipURL.path) to \(finishedURL.path) for DownloadObject call with operation ID \(operationID).")
+            logger.debug(
+                "Failed to rename \(wipURL.path) to \(finishedURL.path) for "
+                + "DownloadObject call with operation ID \(operationID)."
+            )
             // Attempt to delete the temporary file.
             try? FileManager.default.removeItem(at: wipURL)
         }
@@ -366,13 +369,11 @@ public extension S3TransferManager {
 
     func cleanupTempFilesBeforeThrowingError(urls: [URL]) {
         let fileManager = FileManager.default
-        for url in urls {
-            if fileManager.fileExists(atPath: url.path) {
-                do {
-                    try fileManager.removeItem(at: url)
-                } catch {
-                    logger.debug("Failed to delete temporary file at \(url): \(error)")
-                }
+        for url in urls where fileManager.fileExists(atPath: url.path) {
+            do {
+                try fileManager.removeItem(at: url)
+            } catch {
+                logger.debug("Failed to delete temporary file at \(url): \(error)")
             }
         }
     }
