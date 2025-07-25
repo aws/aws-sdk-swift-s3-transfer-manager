@@ -12,7 +12,7 @@ import struct Foundation.URL
 import struct Foundation.UUID
 
 // Imports the rename C-functino which atomically renames AND overwrites file if needed.
-#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+#if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
 import Darwin
 #elseif os(Linux)
 import Glibc
