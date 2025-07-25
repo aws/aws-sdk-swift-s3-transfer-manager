@@ -269,7 +269,8 @@ public extension S3TransferManager {
         _ objectSize: Int,
         _ eTagFromTriageGetObjectResponse: String?
     ) -> GetObjectInput {
-        let subRangeStart = requestNum * config.targetPartSizeBytes
+        // Subrange start is always offset by +1 due to triage getObject request.
+        let subRangeStart = (requestNum + 1) * config.targetPartSizeBytes
         // End byte is inclusive, so must subtract 1 to get target byte amount.
         let subRangeEnd = min(subRangeStart + config.targetPartSizeBytes - 1, objectSize - 1)
         return input.deriveGetObjectInput(

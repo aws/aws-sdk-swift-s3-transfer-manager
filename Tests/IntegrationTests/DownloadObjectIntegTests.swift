@@ -121,11 +121,11 @@ class DownloadObjectIntegTests: XCTestCase {
 
     // MARK: - downloadObject tests for object originally uploaded without using MPU.
 
-    func testDownloadObject_UploadedWithPutObject_MultipartGET_WithNoRangeGiven() async throws {
+    func testDownloadObject_UploadedWithPutObject_RangeGET() async throws {
         try await runTest(
             withDownloadType: .range,
             withKey: nonMPUObjectKey,
-            withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_MultipartGET_WithNoRangeGiven",
+            withFileNamePrefix: "testDownloadObject_UploadedWithPutObject_RangeGET",
             objectDataEnd: 100 * 1024 * 1024 - 1
         )
     }
