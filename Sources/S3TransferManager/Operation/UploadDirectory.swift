@@ -35,7 +35,7 @@ public extension S3TransferManager {
                     recursive: input.recursive,
                     followSymbolicLinks: input.followSymbolicLinks
                 )
-                try await withThrowingTaskGroup(of: Void.self) { group in
+                await withThrowingTaskGroup(of: Void.self) { group in
                     var uploadObjectOperationNum = 1
                     for url in nestedFileURLs {
                         // Need to capture specific operation number value for each task.
@@ -216,18 +216,16 @@ public extension S3TransferManager {
 
         defer { try? fileHandle.close() }
 
-        let putObjectInput = input.putObjectRequestCallback(PutObjectInput(
-            body: .stream(FileStream(fileHandle: fileHandle)),
-            bucket: input.bucket,
-            checksumAlgorithm: config.checksumAlgorithm,
-            key: resolvedObjectKey
-        ))
         let uploadObjectInput = UploadObjectInput(
             id: input.id + "-\(operationNumber)",
             // This is the callback that allows custom modifications of
             //  the individual `PutObjectInput` structs for the SDK user.
-            putObjectInput: putObjectInput,
-            transferListeners: await input.objectTransferListenerFactory(putObjectInput)
+            body: .stream(FileStream(fileHandle: fileHandle)),
+            bucket: input.bucket,
+            // CRC32 is SDK-default algorithm; this can be overwritten in callback by users.
+            checksumAlgorithm: .crc32,
+            key: resolvedObjectKey,
+            transferListeners: await input.objectTransferListenerFactory()
         )
 
         do {

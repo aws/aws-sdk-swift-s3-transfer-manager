@@ -375,11 +375,9 @@ class UploadObjectIntegTests: XCTestCase {
 
         // UploadObject with data that was just created.
         let uploadObjectTask = try tm.uploadObject(input: UploadObjectInput(
-            putObjectInput: PutObjectInput(
-                body: ByteStream.data(inMemoryData),
-                bucket: bucketName,
-                key: size.s3ObjectKey + "-from-in-memory-data"
-            )
+            body: ByteStream.data(inMemoryData),
+            bucket: bucketName,
+            key: size.s3ObjectKey + "-from-in-memory-data"
         ))
         _ = try await uploadObjectTask.value
     }
@@ -393,11 +391,9 @@ class UploadObjectIntegTests: XCTestCase {
 
         // UploadObject with file that was just created.
         let uploadObjectTask = try tm.uploadObject(input: UploadObjectInput(
-            putObjectInput: PutObjectInput(
-                body: ByteStream.stream(FileStream(fileHandle: FileHandle(forReadingFrom: testFileURL))),
-                bucket: bucketName,
-                key: size.s3ObjectKey + "-from-file"
-            )
+            body: ByteStream.stream(FileStream(fileHandle: FileHandle(forReadingFrom: testFileURL))),
+            bucket: bucketName,
+            key: size.s3ObjectKey + "-from-file"
         ))
         _ = try await uploadObjectTask.value
     }

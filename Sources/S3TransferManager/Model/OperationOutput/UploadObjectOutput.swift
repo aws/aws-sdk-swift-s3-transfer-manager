@@ -17,6 +17,8 @@ public struct UploadObjectOutput: Sendable {
     public let checksumCRC32: Swift.String?
     /// The base64-encoded, 32-bit CRC-32C checksum of the object. This will only be present if it was uploaded with the object. When you use an API operation on an object that was uploaded using multipart uploads, this value may not be a direct checksum value of the full object. Instead, it's a calculation based on the checksum values of each individual part. For more information about how checksums are calculated with multipart uploads, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html#large-object-checksums) in the Amazon S3 User Guide.
     public let checksumCRC32C: Swift.String?
+    /// The Base64 encoded, 64-bit CRC64NVME checksum of the object. This header is present if the object was uploaded with the CRC64NVME checksum algorithm, or if it was uploaded without a checksum (and Amazon S3 added the default checksum, CRC64NVME, to the uploaded object). For more information about how checksums are calculated with multipart uploads, see [Checking object integrity in the Amazon S3 User Guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html).
+    public var checksumCRC64NVME: String?
     /// The base64-encoded, 160-bit SHA-1 digest of the object. This will only be present if it was uploaded with the object. When you use the API operation on an object that was uploaded using multipart uploads, this value may not be a direct checksum value of the full object. Instead, it's a calculation based on the checksum values of each individual part. For more information about how checksums are calculated with multipart uploads, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html#large-object-checksums) in the Amazon S3 User Guide.
     public let checksumSHA1: Swift.String?
     /// The base64-encoded, 256-bit SHA-256 digest of the object. This will only be present if it was uploaded with the object. When you use an API operation on an object that was uploaded using multipart uploads, this value may not be a direct checksum value of the full object. Instead, it's a calculation based on the checksum values of each individual part. For more information about how checksums are calculated with multipart uploads, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html#large-object-checksums) in the Amazon S3 User Guide.
@@ -43,6 +45,7 @@ public struct UploadObjectOutput: Sendable {
         self.bucketKeyEnabled = out.bucketKeyEnabled
         self.checksumCRC32 = out.checksumCRC32
         self.checksumCRC32C = out.checksumCRC32C
+        self.checksumCRC64NVME = out.checksumCRC64NVME
         self.checksumSHA1 = out.checksumSHA1
         self.checksumSHA256 = out.checksumSHA256
         self.checksumType = out.checksumType
@@ -59,6 +62,7 @@ public struct UploadObjectOutput: Sendable {
         self.bucketKeyEnabled = out.bucketKeyEnabled
         self.checksumCRC32 = out.checksumCRC32
         self.checksumCRC32C = out.checksumCRC32C
+        self.checksumCRC64NVME = out.checksumCRC64NVME
         self.checksumSHA1 = out.checksumSHA1
         self.checksumSHA256 = out.checksumSHA256
         self.checksumType = out.checksumType

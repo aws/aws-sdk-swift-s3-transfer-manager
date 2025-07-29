@@ -11,8 +11,15 @@ import Smithy
 import XCTest
 
 class DownloadObjectUnitTests: S3TMUnitTestCase {
-    let dummyInput = DownloadObjectInput(outputStream: OutputStream(toMemory: ()), getObjectInput: GetObjectInput())
     let dummyProgressTracker = S3TransferManager.ObjectTransferProgressTracker()
+
+    func makeDummyInput(with stream: OutputStream) -> DownloadObjectInput {
+        return DownloadObjectInput(
+            outputStream: stream,
+            bucket: "abc",
+            key: "abc"
+        )
+    }
 
     // MARK: - writeData tests.
 
@@ -23,8 +30,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         // Write dummy data to file output stream.
         try await DownloadObjectUnitTests.tm.writeData(
             Data("abcdefg".utf8),
-            to: fileOutputStream,
-            dummyInput,
+            makeDummyInput(with: fileOutputStream),
             dummyProgressTracker
         )
 
@@ -45,8 +51,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         // Write dummy data to memory output stream.
         try await DownloadObjectUnitTests.tm.writeData(
             Data("abcdefg".utf8),
-            to: memoryOutputStream,
-            dummyInput,
+            makeDummyInput(with: memoryOutputStream),
             dummyProgressTracker
         )
 
@@ -64,8 +69,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         // Write dummy data to raw byte buffer output stream.
         try await DownloadObjectUnitTests.tm.writeData(
             Data("abcdefg".utf8),
-            to: rawByteBufferOutputStream,
-            dummyInput,
+            makeDummyInput(with: rawByteBufferOutputStream),
             dummyProgressTracker
         )
 
@@ -86,8 +90,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         // Write dummy byte stream to output stream.
         try await DownloadObjectUnitTests.tm.writeByteStream(
             byteStream,
-            to: fileOutputStream,
-            dummyInput,
+            makeDummyInput(with: fileOutputStream),
             dummyProgressTracker
         )
 
@@ -109,8 +112,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         // Write dummy byte stream to output stream.
         try await DownloadObjectUnitTests.tm.writeByteStream(
             byteStream,
-            to: memoryOutputStream,
-            dummyInput,
+            makeDummyInput(with: memoryOutputStream),
             dummyProgressTracker
         )
 
@@ -129,8 +131,7 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         // Write dummy byte stream to output stream.
         try await DownloadObjectUnitTests.tm.writeByteStream(
             byteStream,
-            to: rawByteBufferOutputStream,
-            dummyInput,
+            makeDummyInput(with: rawByteBufferOutputStream),
             dummyProgressTracker
         )
 
@@ -139,57 +140,6 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         let writtenData = Data(buffer.prefix { $0 != 0 })
         let expectedData = Data("0123456789abcde".utf8)
         XCTAssertEqual(writtenData, expectedData)
-    }
-
-    // MARK: - parseBytesRange tests.
-
-    func testParseBytesRangeStart() async throws {
-        let startRangeString = "bytes=1-"
-        let (startByte, endByte) = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(
-            headerStr: startRangeString
-        )
-        XCTAssertEqual(startByte, 1)
-        XCTAssertNil(endByte)
-    }
-
-    func testParseBytesRangeStartAndEnd() async throws {
-        let startEndRangeString = "bytes=1-99"
-        let (startByte, endByte) = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(
-            headerStr: startEndRangeString
-        )
-        XCTAssertEqual(startByte, 1)
-        XCTAssertEqual(endByte, 99)
-    }
-
-    func testParseBytesRangeSuffix() async throws {
-        let suffixRangeString = "bytes=-99"
-        do {
-            _ = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(headerStr: suffixRangeString)
-            XCTFail("Expected S3TMDownloadObjectError.invalidRangeFormat to be thrown.")
-        } catch S3TMDownloadObjectError.invalidRangeFormat {
-            // Success; expected error thrown.
-        }
-    }
-
-    func testParseBytesRangeMultipleRanges() async throws {
-        let multipleRangeString = "bytes=1-99,100-103"
-        do {
-            _ = try DownloadObjectUnitTests.tm.parseBytesRangeHeader(headerStr: multipleRangeString)
-            XCTFail("Expected S3TMDownloadObjectError.invalidRangeFormat to be thrown.")
-        } catch S3TMDownloadObjectError.invalidRangeFormat {
-            // Success; expected error thrown.
-        }
-    }
-
-    // MARK: - getSizeFromContentRangeString tests.
-
-    func testGetSizeFromContentRangeStringValidSize() async throws {
-        let validContentRangeValue = "bytes 1-99/100"
-        let parsedSize = try DownloadObjectUnitTests.tm.getObjectSizeFromContentRangeHeader(
-            headerStr: validContentRangeValue
-        )
-        let expectedSize = 100
-        XCTAssertEqual(parsedSize, expectedSize)
     }
 
     // MARK: - Utility functions.

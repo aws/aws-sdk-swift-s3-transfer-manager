@@ -1,5 +1,6 @@
 // swift-tools-version: 5.9
 
+import Foundation
 import PackageDescription
 
 let package = Package(
@@ -16,10 +17,7 @@ let package = Package(
             targets: ["S3TransferManager"]
         ),
     ],
-    dependencies: [
-        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.2.48"),
-        .package(url: "https://github.com/awslabs/smithy-swift.git", from: "0.125.0"),
-    ],
+    dependencies: runtimeDependencies,
     targets: [
         .target(
             name: "S3TransferManager",
@@ -78,3 +76,25 @@ let package = Package(
         )
     ]
 )
+
+private var runtimeDependencies: [Package.Dependency] {
+    let smithySwiftLocal = "../smithy-swift"
+    let smithySwiftGitURL = "https://github.com/smithy-lang/smithy-swift"
+
+    let awsSDKSwiftLocal = "../aws-sdk-swift"
+    let awsSDKSwiftGitURL = "https://github.com/awslabs/aws-sdk-swift.git"
+
+    let useLocalDeps = ProcessInfo.processInfo.environment["AWS_SWIFT_SDK_S3TM_USE_LOCAL_DEPS"] != nil
+
+    if useLocalDeps {
+        return [
+            .package(path: smithySwiftLocal),
+            .package(path: awsSDKSwiftLocal)
+        ]
+    } else {
+        return [
+            .package(url: smithySwiftGitURL, from: "0.146.0"),
+            .package(url: awsSDKSwiftGitURL, from: "1.5.0")
+        ]
+    }
+}

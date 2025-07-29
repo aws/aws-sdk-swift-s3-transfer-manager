@@ -49,9 +49,11 @@ class UploadObjectUnitTests: S3TMUnitTestCase {
     // MARK: - readPartData tests.
 
     func testReadPartDataDataBody() async throws {
-        let input = UploadObjectInput(putObjectInput: PutObjectInput(
-            body: ByteStream.data(Data("0123456789".utf8))
-        ))
+        let input = UploadObjectInput(
+            body: ByteStream.data(Data("0123456789".utf8)),
+            bucket: "",
+            key: ""
+        )
         let readPartData = try await UploadObjectUnitTests.tm.readPartData(input: input, partSize: 4, partOffset: 6)
         let expectedPartData = Data("6789".utf8)
         XCTAssertEqual(readPartData, expectedPartData)
@@ -60,9 +62,11 @@ class UploadObjectUnitTests: S3TMUnitTestCase {
     func testReadPartDataStreamBody() async throws {
         let tempFileURL = try generateTempFile(content: Data("0123456789".utf8))
         let body = try ByteStream.stream(FileStream(fileHandle: FileHandle(forReadingFrom: tempFileURL)))
-        let input = UploadObjectInput(putObjectInput: PutObjectInput(
-            body: body
-        ))
+        let input = UploadObjectInput(
+            body: body,
+            bucket: "",
+            key: ""
+        )
         let readPartData = try await UploadObjectUnitTests.tm.readPartData(
             input: input,
             partSize: 4,

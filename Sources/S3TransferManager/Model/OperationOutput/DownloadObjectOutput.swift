@@ -23,6 +23,8 @@ public struct DownloadObjectOutput: Sendable {
     public let checksumCRC32: Swift.String?
     /// The base64-encoded, 32-bit CRC-32C checksum of the object. This will only be present if it was uploaded with the object. For more information, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html) in the Amazon S3 User Guide.
     public let checksumCRC32C: Swift.String?
+    /// The Base64 encoded, 64-bit CRC64NVME checksum of the object. For more information, see [Checking object integrity in the Amazon S3 User Guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html).
+    public var checksumCRC64NVME: String?
     /// The base64-encoded, 160-bit SHA-1 digest of the object. This will only be present if it was uploaded with the object. For more information, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html) in the Amazon S3 User Guide.
     public let checksumSHA1: Swift.String?
     /// The base64-encoded, 256-bit SHA-256 digest of the object. This will only be present if it was uploaded with the object. For more information, see [ Checking object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html) in the Amazon S3 User Guide.
@@ -90,20 +92,24 @@ public struct DownloadObjectOutput: Sendable {
     /// If the bucket is configured as a website, redirects requests for this object to another object in the same bucket or to an external URL. Amazon S3 stores the value of this header in the object metadata. This functionality is not supported for directory buckets.
     public let websiteRedirectLocation: Swift.String?
 
-    init(getObjectOutput: GetObjectOutput) {
+    init(getObjectOutput: GetObjectOutput, objectSize: Int) {
         self.acceptRanges = getObjectOutput.acceptRanges
         self.bucketKeyEnabled = getObjectOutput.bucketKeyEnabled
         self.cacheControl = getObjectOutput.cacheControl
-        self.checksumCRC32 = getObjectOutput.checksumCRC32
-        self.checksumCRC32C = getObjectOutput.checksumCRC32C
-        self.checksumSHA1 = getObjectOutput.checksumSHA1
-        self.checksumSHA256 = getObjectOutput.checksumSHA256
+        // Set full object checksum in response only if checksum type is full object.
+        let ct = getObjectOutput.checksumType
+        self.checksumCRC32 = ct == .fullObject ? getObjectOutput.checksumCRC32 : nil
+        self.checksumCRC32C = ct == .fullObject ? getObjectOutput.checksumCRC32C : nil
+        self.checksumCRC64NVME = ct == .fullObject ? getObjectOutput.checksumCRC64NVME : nil
+        self.checksumSHA1 = ct == .fullObject ? getObjectOutput.checksumSHA1 : nil
+        self.checksumSHA256 = ct == .fullObject ? getObjectOutput.checksumSHA256 : nil
         self.checksumType = getObjectOutput.checksumType
         self.contentDisposition = getObjectOutput.contentDisposition
         self.contentEncoding = getObjectOutput.contentEncoding
         self.contentLanguage = getObjectOutput.contentLanguage
-        self.contentLength = getObjectOutput.contentLength
-        self.contentRange = getObjectOutput.contentRange
+        // Set final TM operation output content length & content range to full object size & bytes range.
+        self.contentLength = objectSize
+        self.contentRange = "bytes 0-\(objectSize - 1)/\(objectSize)"
         self.contentType = getObjectOutput.contentType
         self.deleteMarker = getObjectOutput.deleteMarker
         self.eTag = getObjectOutput.eTag

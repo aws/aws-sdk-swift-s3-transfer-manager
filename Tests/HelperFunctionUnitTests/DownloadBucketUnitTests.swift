@@ -21,9 +21,6 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             "dir1/key2.txt" : URL with path p + dir1/key2.txt,
             "dir1/../key1.txt" : URL with path p + dir1/../key1.txt,
         ]
-
-        Depending on the order of mappings, either one of the semantically identical mappings must be skipped.
-        As a result, only two files should be created (key1.txt & key2.txt).
      */
 
     func testCreateDestinationFiles() throws {
@@ -37,7 +34,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
         let actualKeyToCreatedURLsMap = try DownloadBucketUnitTests.tm.createDestinationFiles(
             keyToResolvedURLMapping: keyToURLInput
         )
-        XCTAssertEqual(actualKeyToCreatedURLsMap.count, 2)
+        XCTAssertEqual(actualKeyToCreatedURLsMap.count, 3)
         try FileManager.default.removeItem(at: testDir)
     }
 
@@ -223,5 +220,27 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
         XCTAssertTrue(try fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile ?? false)
         try FileManager.default.removeItem(at: tempDir.appendingPathComponent("\(uuid)/"))
+    }
+
+    // MARK: - constructTempFileURL tests
+
+    func testConstructTempFileURL() throws {
+        let url = URL(filePath: "/test/destination/file.txt")
+        let tempURL = DownloadBucketUnitTests.tm.constructTempFileURL(originalURL: url)
+        let filename = tempURL.deletingPathExtension().lastPathComponent
+        let ext = tempURL.pathExtension
+        XCTAssertTrue(filename.hasPrefix("file.s3tmp."))
+        XCTAssertLessThanOrEqual(filename.replacingOccurrences(of: "file.s3tmp.", with: "").count, 8)
+        XCTAssertEqual(ext, "txt")
+    }
+
+    // MARK: - deconstructTempFileURL tests
+
+    func testDeconstructTempFileURL() throws {
+        let original = URL(fileURLWithPath: "/test/destination/file.txt")
+        let tempURL = DownloadBucketUnitTests.tm.constructTempFileURL(originalURL: original)
+        let restored = DownloadBucketUnitTests.tm.deconstructTempFileURL(tempFileURL: tempURL)
+
+        XCTAssertEqual(restored.path, original.path)
     }
 }

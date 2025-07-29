@@ -21,8 +21,8 @@ public struct UploadObjectLoggingTransferListener: UploadObjectTransferListener,
         snapshot: SingleObjectTransferProgressSnapshot
     ) {
         let message = "Transfer started. "
-        + "Resolved object key: \"\(input.putObjectInput.key!)\". "
-        + "Destination bucket: \"\(input.putObjectInput.bucket!)\"."
+        + "Resolved object key: \"\(input.key)\". "
+        + "Destination bucket: \"\(input.bucket)\"."
         log(input.id, message)
     }
 
