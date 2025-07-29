@@ -7,9 +7,9 @@ let package = Package(
     name: "aws-sdk-swift-s3-transfer-manager",
     platforms: [
         .macOS(.v12),
-        .iOS(.v16),
-        .tvOS(.v16),
-        .watchOS(.v9)
+        .iOS(.v13),
+        .tvOS(.v13),
+        .watchOS(.v6)
     ],
     products: [
         .library(
