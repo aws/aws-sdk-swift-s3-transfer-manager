@@ -69,19 +69,19 @@ class UploadObjectIntegTests: XCTestCase {
         }
 
         // Helper functions for deleting the bucket.
-        func listBucketKeys() async throws -> Set<String> {
+        @Sendable func listBucketKeys() async throws -> Set<String> {
             let input = ListObjectsV2Input(bucket: bucketName)
             let output = try await s3.listObjectsV2(input: input)
             return Set(output.contents?.compactMap { $0.key } ?? [])
         }
-        func emptyBucket() async throws {
+        @Sendable func emptyBucket() async throws {
             let keys = try await listBucketKeys()
             for key in keys {
                 let deleteInput = DeleteObjectInput(bucket: bucketName, key: key)
                 _ = try await s3.deleteObject(input: deleteInput)
             }
         }
-        func deleteBucket(bucketName: String) async throws {
+        @Sendable func deleteBucket(bucketName: String) async throws {
             let input = DeleteBucketInput(bucket: bucketName)
             _ = try await s3.deleteBucket(input: input)
         }

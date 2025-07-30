@@ -225,7 +225,7 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
     // MARK: - constructTempFileURL tests
 
     func testConstructTempFileURL() throws {
-        let url = URL(filePath: "/test/destination/file.txt")
+        let url = URL(fileURLWithPath: "/test/destination/file.txt")
         let tempURL = DownloadBucketUnitTests.tm.constructTempFileURL(originalURL: url)
         let filename = tempURL.deletingPathExtension().lastPathComponent
         let ext = tempURL.pathExtension
