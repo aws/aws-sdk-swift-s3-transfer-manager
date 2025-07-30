@@ -24,7 +24,7 @@ There are 4 transfer operations supported by S3TM:
 * Upload a directory
 * Download a bucket
 
-As mentioned above, S3TM allows monitoring the progress of all 4 operations above.
+The S3TM allows monitoring the progress of all 4 operations listed above.
 
 ## Getting Started
 
@@ -33,7 +33,7 @@ As mentioned above, S3TM allows monitoring the progress of all 4 operations abov
 1. Open your project in Xcode and click on your `.xcodeproj` file, located at the top of the file navigator on the left pane.
 2. Click the project name that appears on the left pane of the `.xcodeproj` file window.
 3. Click on `Package Dependencies` tab, and click `+` button.
-4. In `Search of Enter Package URL` search bar, enter `git@github.com:aws/aws-sdk-swift-s3-transfer-manager.git`.
+4. In `Search or Enter Package URL` search bar, enter `git@github.com:aws/aws-sdk-swift-s3-transfer-manager.git`.
 5. Wait for package to load, and once it's loaded, choose the target you want to add the `S3TransferManager` module to.
 
 ### Add the dependency to your Swift package
@@ -69,7 +69,7 @@ Or you could pass the config object to the initializer to customize S3TM by doin
 
 ```swift
 // Create the custom S3 client config that you want S3TM to use.
-let customS3ClientConfig = try await S3Client.S3ClientConfiguration(
+let customS3ClientConfig = try S3Client.S3ClientConfiguration(
     region: "some-region",
     . . . custom S3 client configurations . . .
 )
@@ -79,8 +79,6 @@ let s3tmConfig = try await S3TransferManagerConfig(
     s3ClientConfig: customS3ClientConfig,
     targetPartSizeBytes: 10 * 1024 * 1024, // 10MB part size.
     multipartUploadThresholdBytes: 100 * 1024 * 1024, // 100MB threshold.
-    checksumValidationEnabled: true,
-    checksumAlgorithm: .crc32,
     multipartDownloadType: .part
 )
 
@@ -94,24 +92,21 @@ For more information on what each configuration does, please refer to [the docum
 
 ### Upload an object
 
-To upload a file to Amazon S3, you need to provide the input struct UploadObjectInput, which is a container for the PutObjectInput struct and an array of TransferListener. You must provide the target bucket, the S3 object key to use, and the file body via PutObjectInput members. 
+To upload a file to Amazon S3, you need to provide the input struct UploadObjectInput, which contains a subset of PutObjectInput struct properties and an array of TransferListener. You must provide the destination bucket, the S3 object key to use, and the object body. 
 
-For uploading files bigger than the configured threshold (16MB default), S3TM breaks them down into parts, each with the configured part size, and uploads them concurrently using S3’s [multipart upload feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html#mpu-process).
+When object being uploaded is bigger than the threshold configured by `multipartUploadThresholdBytes` (16MB default), S3TM breaks them down into parts, each with the part size configured by `targetPartSizeBytes` (8MB default), and uploads them concurrently using S3’s [multipart upload feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html#mpu-process).
 
 ```swift
 let s3tm = try await S3TransferManager()
 
 // Construct UploadObjectInput.
-let putObjectInput = PutObjectInput(
+let uploadObjectInput = UploadObjectInput(
     body: ByteStream.stream(
         FileStream(fileHandle: try FileHandle(forReadingFrom: URL(string: "file-to-upload.txt")!))
     ),
     bucket: "destination-bucket",
-    key: "some-key"
-)
-let uploadObjectInput = UploadObjectInput(
-    putObjectInput: putObjectInput,
-    transferListeners: [LoggingTransferListener()]
+    key: "some-key",
+    transferListeners: [UploadObjectLoggingTransferListener()]
 )
 
 // Call .uploadObject and save the returned task.
@@ -128,21 +123,18 @@ do {
 
 ### Download an object
 
-To download an object from Amazon S3, you need to provide the input struct DownloadObjectInput, which is a container for the download destination, the GetObjectInput struct, and an array of TransferListener. The download destination is an instance of [Swift’s Foundation.OutputStream](https://developer.apple.com/documentation/foundation/outputstream). You must provide the target bucket and the S3 object key via GetObjectInput members. 
+To download an object from Amazon S3, you need to provide the input struct DownloadObjectInput, which contains the download destination, a subset of GetObjectInput struct properties, and an array of TransferListener. The download destination is an instance of [Swift’s Foundation.OutputStream](https://developer.apple.com/documentation/foundation/outputstream). You must provide the download destination, the source bucket, and the S3 object key of the object to download. 
 
-For downloading objects bigger than a single part size (8MB default), S3TM concurrently downloads the entire object in parts using part numbers or byte ranges.
+When object being downloaded is bigger than the size of a single part configured by `targetPartSizeBytes`  (8MB default), S3TM downloads the object in parts concurrently using either part numbers or byte ranges as configured by `multipartDownloadType` (`.part` default).
 
 ```swift
 let s3tm = try await S3TransferManager()
 
 // Construct DownloadObjectInput.
-let getObjectInput = GetObjectInput(
-    bucket: "source-bucket",
-    key: "s3-object.txt"
-)
 let downloadObjectInput = DownloadObjectInput(
     outputStream: OutputStream(toFileAtPath: "destination-file.txt", append: true)!,
-    getObjectInput: getObjectInput
+    bucket: "source-bucket",
+    key: "s3-object.txt"
 )
 
 // Call .downloadObject and save the returned task.
@@ -159,7 +151,7 @@ do {
 
 ### Upload a directory
 
-To upload a local directory to Amazon S3, you need to provide the input struct UploadDirectoryInput and provide the target bucket, and the source directory’s URL. 
+To upload a local directory to a S3 bucket, you need to provide the input struct UploadDirectoryInput and provide the destination bucket, and the source directory’s URL. 
 
 The UploadDirectoryInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the UploadDirectoryInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/UploadDirectoryInput.swift).
 
@@ -213,20 +205,24 @@ do {
 
 ### Monitor transfer progress
 
-You can optionally configure transfer listeners for any of the S3TM operations above. The Amazon S3 Transfer Manager for Swift provides 2 canned transfer progress listeners for you. They’re LoggingTransferListener and StreamingTransferListener. 
+You can optionally configure transfer listeners for any of the S3TM operations above. The Amazon S3 Transfer Manager for Swift provides 2 canned transfer progress listeners for you. They’re LoggingTransferListeners and StreamingTransferListeners. There's a specific listener type for each operation, e.g., `UploadObjectLoggingTransferListener` is a LoggingTransferListener for the single object upload operation.
 
-The LoggingTransferListener logs transfer events to the console (or some other configured location) using [swift-log](https://github.com/apple/swift-log). The StreamingTransferListener publishes transfer events to its AsyncThrowingStream instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., UploadObject.transferListeners). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the TransferListener protocol and configuring it in the input structs.
+The LoggingTransferListeners log transfer events to the console using [swift-log](https://github.com/apple/swift-log). The StreamingTransferListeners publish transfer events to its AsyncThrowingStream instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., UploadObjectInput's `transferListeners` field). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the TransferListener protocol and configuring it in the input structs.
 
 See below for the example usage of the two canned transfer listeners.
 
 #### LoggingTransferListener
 
 ```swift
-// Assume s3tm: S3TransferManager & putObjectInput: PutObjectInput are initialized.
+// Assume s3tm: S3TransferManager is initialized.
 
 let uploadObjectInput = UploadObjectInput(
-    putObjectInput: putObjectInput,
-    transferListeners: [LoggingTransferListener()]
+    body: ByteStream.stream(
+        FileStream(fileHandle: try FileHandle(forReadingFrom: URL(string: "file-to-upload.txt")!))
+    ),
+    bucket: "destination-bucket",
+    key: "some-key",
+    transferListeners: [UploadObjectLoggingTransferListener()]
 )
 
 // Call .uploadObject and save the returned task.
@@ -237,41 +233,40 @@ let uploadObjectTask = try s3tm.uploadObject(input: uploadObjectInput)
 
 #### StreamingTransferListener
 
-For StreamingTransferListener, you must close the underlying AsyncThrowingStream by explicitly calling closeStream() on the StreamingTransferListener instance to prevent memory leaks and hanging customers.
+For StreamingTransferListener, you must close the underlying AsyncThrowingStream after transfer completion by explicitly calling closeStream() on the StreamingTransferListener instance to prevent memory leaks and hanging stream consumers.
 
 ```swift
 let s3tm = try await S3TransferManager()
         
-// Create the StreamingTransferListener.
-let streamingTransferListener = StreamingTransferListener()
+// Create the UploadObjectStreamingTransferListener.
+let uploadObjectStreamingTransferListener = UploadObjectStreamingTransferListener()
 
-// Start up the background Task that consumes uploadObject events from the corresponding stream.
+// Start up the background Task that consumes events from the corresponding stream.
 Task {
-    for try await uploadObjectTransferEvent in streamingTransferListener.uploadObjectEventStream {
+    for try await uploadObjectTransferEvent in uploadObjectStreamingTransferListener.eventStream {
         switch uploadObjectTransferEvent {
-        case .uploadObjectInitiated(let input, let snapshot):
+        case .initiated(let input, let snapshot):
             print("UploadObject operation initiated. ID: \(input.id)")
-        case .uploadObjectBytesTransferred(let input, let snapshot):
+        case .bytesTransferred(let input, let snapshot):
             print("Transferred more bytes. Running total: \(snapshot.transferredBytes)")
-        case .uploadObjectComplete(let input, let output, let snapshot):
+        case .complete(let input, let output, let snapshot):
             print("Successfully finished UploadObject. ID: \(input.id)")
-            streamingTransferListener.closeStreams() // Close stream explicitly if it won't be used anymore.
-        case .uploadObjectFailed(let input, let snapshot):
+            uploadObjectStreamingTransferListener.closeStream() // Close stream explicitly if it won't be used anymore.
+        case .failed(let input, let snapshot):
             print("UploadObject failed. ID: \(input.id)")
-            streamingTransferListener.closeStreams() // Close stream explicitly if it won't be used anymore.
+            uploadObjectStreamingTransferListener.closeStream() // Close stream explicitly if it won't be used anymore.
         }
     }
 }
 
 let fileToUpload = URL(string: "file-to-upload.txt")!
+
 // Invoke the transfer manager operation with the streaming transfer listener configured in the input.
 let uploadObjectTask = try s3tm.uploadObject(input: UploadObjectInput(
-    putObjectInput: PutObjectInput(
-        body: ByteStream.stream(FileStream(fileHandle: FileHandle(forReadingFrom: fileToUpload))),
-            bucket: "destination-bucket",
-        key: "some-key"
-    ),
-    transferListeners: [streamingTransferListener]
+    body: ByteStream.stream(FileStream(fileHandle: FileHandle(forReadingFrom: fileToUpload))),
+        bucket: "destination-bucket",
+    key: "some-key",
+    transferListeners: [uploadObjectStreamingTransferListener]
 ))
 
 // Task will output real-time upload transfer progress to the console as it executes.
