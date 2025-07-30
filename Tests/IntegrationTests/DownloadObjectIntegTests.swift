@@ -240,8 +240,11 @@ class DownloadObjectIntegTests: XCTestCase {
             bucket: bucketName,
             key: key
         )).value
-        let destinationFileHandle = try FileHandle(forReadingFrom: destinationFileURL)
-        let actualFileLength = try destinationFileHandle.seekToEnd()
+        let attributes = try FileManager.default.attributesOfItem(atPath: destinationFileURL.path)
+        guard let actualFileLength = attributes[.size] as? Int else {
+            XCTFail("Could not read file size as Int")
+            return
+        }
         let expectedFileLength = fileSize
         XCTAssertEqual(Int(actualFileLength), expectedFileLength)
         try FileManager.default.removeItem(at: destinationFileURL)

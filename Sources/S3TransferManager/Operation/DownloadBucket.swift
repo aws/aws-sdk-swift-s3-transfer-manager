@@ -11,7 +11,7 @@ import class Foundation.OutputStream
 import struct Foundation.URL
 import struct Foundation.UUID
 
-// Imports the rename C-functino which atomically renames AND overwrites file if needed.
+// Imports the rename C-function which atomically renames AND overwrites file if needed.
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
 import Darwin
 #elseif os(Linux)
@@ -264,9 +264,9 @@ public extension S3TransferManager {
         let ext = tempFileURL.pathExtension
 
         // Look for ".s3tmp." in the filename.
-        if let range = filename.range(of: ".s3tmp.") {
+        if let range = filename.range(of: ".s3tmp.", options: .backwards) {
             let suffixStart = filename[range.upperBound...]
-            if suffixStart.count <= 8 {
+            if suffixStart.count == 8 {
                 let baseFilename = String(filename[..<range.lowerBound])
                 let finalFilename = ext.isEmpty ? baseFilename : "\(baseFilename).\(ext)"
                 return directory.appendingPathComponent(finalFilename)
@@ -281,7 +281,7 @@ public extension S3TransferManager {
         from wipURL: URL,
         to finishedURL: URL,
         operationID: String
-    ) {
+    ) throws {
         // Remove .s3tmp.<8-char-unique-ID> suffix from temp URL to finalize download.
         let result = wipURL.withUnsafeFileSystemRepresentation { wipFSR in
             finishedURL.withUnsafeFileSystemRepresentation { finishedFSR in
@@ -290,12 +290,14 @@ public extension S3TransferManager {
         }
         if result != 0 { // If rename failed:
             // Log the error before cleanup
-            logger.debug(
+            logger.error(
                 "Failed to rename \(wipURL.path) to \(finishedURL.path) for "
                 + "DownloadObject call with operation ID \(operationID)."
             )
             // Attempt to delete the temporary file.
             try? FileManager.default.removeItem(at: wipURL)
+            // Throw error; gets rethrown or hadled by failure policy.
+            throw S3TMDownloadBucketError.FailedToRenameTemporaryFileAfterDownload(tempFile: wipURL)
         }
     }
 
@@ -321,7 +323,7 @@ public extension S3TransferManager {
             let downloadObjectTask = try downloadObject(input: downloadObjectInput)
             _ = try await downloadObjectTask.value
             // Finalize the file by removing the temporary suffix .s3tmp.<8-char-ID> from the filename in an atomic rename operation.
-            atomicRenameWithOverwrite(
+            try atomicRenameWithOverwrite(
                 from: pair.value,
                 to: deconstructTempFileURL(tempFileURL: pair.value),
                 operationID: operationID
@@ -373,7 +375,7 @@ public extension S3TransferManager {
             do {
                 try fileManager.removeItem(at: url)
             } catch {
-                logger.debug("Failed to delete temporary file at \(url): \(error)")
+                logger.error("Failed to delete temporary file at \(url): \(error)")
             }
         }
     }
@@ -390,4 +392,5 @@ public enum S3TMDownloadBucketError: Error {
         failedDownloadObjectInput: DownloadObjectInput
     )
     case FailedToCreateNestedDestinationDirectory(at: URL)
+    case FailedToRenameTemporaryFileAfterDownload(tempFile: URL)
 }
