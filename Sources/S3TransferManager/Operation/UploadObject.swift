@@ -265,12 +265,16 @@ public extension S3TransferManager {
             let partOffset = (partNumber - 1) * partSize
             // Either take full part size or remainder (only for the last part).
             let resolvedPartSize = min(partSize, payloadSize - partOffset)
-            return try await self.readPartData(
+            let partData = try await self.readPartData(
                 input: input,
                 partSize: resolvedPartSize,
                 partOffset: partOffset,
                 byteStreamPartReader: byteStreamPartReader
             )
+            guard partData.count == resolvedPartSize else {
+                throw S3TMUploadObjectError.incorrectSizePartRead(expected: resolvedPartSize, actual: partData.count)
+            }
+            return partData
         }()
 
         let uploadPartInput = input.deriveUploadPartInput(
@@ -342,6 +346,7 @@ public enum S3TMUploadObjectError: Error {
     case failedToAbortMPU(errorFromMPUOperation: Error, errorFromFailedAbortMPUOperation: Error)
     case unseekableStreamPayload
     case incorrectNumberOfUploadedParts(message: String)
+    case incorrectSizePartRead(expected: Int, actual: Int)
 }
 
 // An actor used to read a ByteStream in parts while ensuring concurrency-safety.
