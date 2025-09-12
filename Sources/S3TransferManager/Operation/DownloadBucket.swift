@@ -135,7 +135,6 @@ public extension S3TransferManager {
             objects: objects,
             destination: input.destination,
             s3Prefix: input.s3Prefix,
-            s3Delimiter: input.s3Delimiter,
             filter: input.filter
         )
         // Subset of `objectKeyToResolvedFileURLMap` above.
@@ -189,29 +188,19 @@ public extension S3TransferManager {
         objects: [S3ClientTypes.Object],
         destination: URL,
         s3Prefix: String? = nil,
-        s3Delimiter: String,
         filter: (S3ClientTypes.Object) -> Bool
     ) -> [String: URL] {
         return Dictionary(uniqueKeysWithValues: objects.compactMap { object -> (String, URL)? in
             let originalKey = object.key!
+            let delimiter = "/"
 
             // Use user-provided filter to skip objects.
             // If key ends with delimiter, it's a 0-byte file used by S3 to simulate directory structure; skip that too.
-            if !filter(object) || originalKey.hasSuffix(s3Delimiter) {
+            if !filter(object) || originalKey.hasSuffix(delimiter) {
                return nil
             }
 
-            let keyWithoutPrefix = originalKey.removePrefix(s3Prefix ?? "")
-
-            // Replace instances of s3Delimiter in keyWithoutPrefix with Mac/Linux system default
-            //      path separtor "/" if s3Delimiter isn't "/".
-            // This effectively "translates" object key value to a file path.
-            let relativeFilePath = s3Delimiter == defaultPathSeparator()
-            ? keyWithoutPrefix
-            : keyWithoutPrefix.replacingOccurrences(
-                of: s3Delimiter,
-                with: defaultPathSeparator()
-            )
+            let relativeFilePath = originalKey.removePrefix(s3Prefix ?? "")
 
             // If relativeFilePath escapes destination directory, skip it.
             if filePathEscapesDestination(filePath: relativeFilePath) {

@@ -47,7 +47,6 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             objects: objects,
             destination: destination,
             s3Prefix: nil,
-            s3Delimiter: "/",
             filter: { object in return !object.key!.hasPrefix("dir1") }
         )
         let expectedMap: [String: URL] = [
@@ -67,7 +66,6 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             objects: objects,
             destination: destination,
             s3Prefix: prefix,
-            s3Delimiter: "/",
             filter: { object in return true }
         )
         let expectedMap: [String: URL] = [
@@ -75,27 +73,6 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
             "pre/dir1/b.txt": URL(string: "dest/dir1/b.txt")!,
             "pre/dir1/dir2/c.txt": URL(string: "dest/dir1/dir2/c.txt")!,
             "pre/dir3/d.txt": URL(string: "dest/dir3/d.txt")!,
-        ]
-        XCTAssertEqual(objectKeyToResolvedURL, expectedMap)
-    }
-
-    func testGetFileURLsResolvedFromObjectKeysWithCustomS3Delimiter() {
-        let objects = s3ObjectsForGetFileURLsResolvedFromObjectKeysTests(
-            delimiter: "-"
-        )
-        let destination = URL(string: "dest/")!
-        let objectKeyToResolvedURL = DownloadBucketUnitTests.tm.getFileURLsResolvedFromObjectKeys(
-            objects: objects,
-            destination: destination,
-            s3Prefix: nil,
-            s3Delimiter: "-",
-            filter: { object in return true }
-        )
-        let expectedMap: [String: URL] = [
-            "a.txt": URL(string: "dest/a.txt")!,
-            "dir1-b.txt": URL(string: "dest/dir1/b.txt")!,
-            "dir1-dir2-c.txt": URL(string: "dest/dir1/dir2/c.txt")!,
-            "dir3-d.txt": URL(string: "dest/dir3/d.txt")!,
         ]
         XCTAssertEqual(objectKeyToResolvedURL, expectedMap)
     }
@@ -112,9 +89,9 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
          - dir3/d.txt
      */
     private func s3ObjectsForGetFileURLsResolvedFromObjectKeysTests(
-        delimiter d: String = "/",
         prefix: String = ""
     ) -> [S3ClientTypes.Object] {
+        let d = "/"
         return [
             .init(key: prefix + "simulatedDirectory\(d)"), // File skipped bc it ends with "/"
             // File below needs to be skipped bc it escapes dest.

@@ -37,8 +37,8 @@ class DownloadBucketIntegTests: XCTestCase {
      */
 
     // This setUp runs just once for the test class, before tests start execution.
-    // Creates a bucket with regular keys (default delimiter "/" and no prefix) and
-    //  a bucket with custom keys (delimiter "-" and prefix "pre").
+    // Creates a bucket with regular keys (no prefix) and
+    //  a bucket with custom keys (prefix "pre").
     // No-op if buckets already exist.
     override class func setUp() {
         tempDir = setUpDirectoryForDownloadBucketIntegTests()
@@ -124,15 +124,14 @@ class DownloadBucketIntegTests: XCTestCase {
                         bucket: bucketWithCustomKeys,
                         source: sourceURL,
                         recursive: true,
-                        s3Prefix: "pre",
-                        s3Delimiter: "-"
+                        s3Prefix: "pre"
                     )).value
                     // Assert bucket content is as expected.
                     let expectedKeys: Set = [
-                        "pre-a.txt",
-                        "pre-nested-nested2-nested3_1-b.txt",
-                        "pre-nested-nested2-nested3_2-c.txt",
-                        "pre-nested-nested2-nested3_2-d.txt",
+                        "pre/a.txt",
+                        "pre/nested/nested2/nested3_1/b.txt",
+                        "pre/nested/nested2/nested3_2/c.txt",
+                        "pre/nested/nested2/nested3_2/d.txt",
                     ]
                     let actualKeys = Set(try await s3.listObjectsV2(
                         input: ListObjectsV2Input(bucket: bucketWithCustomKeys)
@@ -211,8 +210,7 @@ class DownloadBucketIntegTests: XCTestCase {
         _ = try await tm.downloadBucket(input: DownloadBucketInput(
             bucket: bucketWithCustomKeys,
             destination: temporaryDestinationDirectoryURL,
-            s3Prefix: "pre",
-            s3Delimiter: "-"
+            s3Prefix: "pre"
         )).value
         try validateBucketDownload(expectedFileURLs: [
             // Original file structure is expected since matching operation settings to custom key values
@@ -231,10 +229,10 @@ class DownloadBucketIntegTests: XCTestCase {
         )).value
         try validateBucketDownload(expectedFileURLs: [
             // Flat list of files is expected since we didn't match operation settings to custom key values.
-            temporaryDestinationDirectoryURL.appendingPathComponent("pre-a.txt"),
-            temporaryDestinationDirectoryURL.appendingPathComponent("pre-nested-nested2-nested3_1-b.txt"),
-            temporaryDestinationDirectoryURL.appendingPathComponent("pre-nested-nested2-nested3_2-c.txt"),
-            temporaryDestinationDirectoryURL.appendingPathComponent("pre-nested-nested2-nested3_2-d.txt")
+            temporaryDestinationDirectoryURL.appendingPathComponent("pre/a.txt"),
+            temporaryDestinationDirectoryURL.appendingPathComponent("pre/nested/nested2/nested3_1/b.txt"),
+            temporaryDestinationDirectoryURL.appendingPathComponent("pre/nested/nested2/nested3_2/c.txt"),
+            temporaryDestinationDirectoryURL.appendingPathComponent("pre/nested/nested2/nested3_2/d.txt")
         ])
     }
 

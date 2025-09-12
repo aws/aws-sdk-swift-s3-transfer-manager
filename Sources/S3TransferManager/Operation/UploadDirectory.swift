@@ -240,25 +240,22 @@ public extension S3TransferManager {
     }
 
     internal func getResolvedObjectKey(of url: URL, inDir dir: URL, input: UploadDirectoryInput) throws -> String {
-        // Step 1: if given a non-default s3Delimter, throw validation exception if the file name contains s3Delimiter.
-        if input.s3Delimiter != defaultPathSeparator() && url.lastPathComponent.contains(input.s3Delimiter) {
+        let delimiter = "/"
+        // Throw validation exception if the file name contains delimiter.
+        if url.lastPathComponent.contains(delimiter) {
             throw S3TMUploadDirectoryError.InvalidFileName(
-                "The file \"\(url.absoluteString)\" has S3 delimiter \"\(input.s3Delimiter)\" in its name."
+                "The file \"\(url.absoluteString)\" has \"\(delimiter)\" in its name."
             )
         }
-        // Step 2: append s3Delimiter to s3Prefix if it does not already end with it.
+        // Append delimiter to s3Prefix if it does not already end with it.
         var resolvedPrefix: String = ""
         if let providedPrefix = input.s3Prefix {
-            resolvedPrefix = providedPrefix + (providedPrefix.hasSuffix(input.s3Delimiter) ? "" : input.s3Delimiter)
+            resolvedPrefix = providedPrefix + (providedPrefix.hasSuffix(delimiter) ? "" : delimiter)
         }
-        // Step 3: retrieve the relative path of the file URL.
+        // Retrieve the relative path of the file URL.
         // Get absolute string of file URL & dir URL; remove dir URL prefix from file URL to get the relative path.
-        var relativePath = url.absoluteString.removePrefix(dir.absoluteString).removePrefix(defaultPathSeparator())
-        // Step 4: if user configured a custom s3Delimiter, replace all instances of system default path separator "/" in the relative path from step 3 with the custom s3Delimiter.
-        if input.s3Delimiter != defaultPathSeparator() {
-            relativePath = relativePath.replacingOccurrences(of: defaultPathSeparator(), with: input.s3Delimiter)
-        }
-        // Step 5: prefix the string from Step 4 with the resolved prefix.
+        let relativePath = url.absoluteString.removePrefix(dir.absoluteString).removePrefix(defaultPathSeparator())
+        // Prefix the resolved relative path with the resolved prefix.
         return resolvedPrefix + relativePath
     }
 }

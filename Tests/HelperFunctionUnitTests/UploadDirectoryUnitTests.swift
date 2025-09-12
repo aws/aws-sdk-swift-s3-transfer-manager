@@ -196,47 +196,18 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
         - Directory URL :   source/
      */
 
-    func testGetResolvedObjectKeyDefaultS3DelimiterNilPrefix() throws {
+    func testGetResolvedObjectKeyNilPrefix() throws {
         let (fileURL, dirURL) = try getResolvedObjectKeyTestURLs()
         let resolvedKey = try getResolvedObjectKeyTestHelper(fileURL: fileURL, dirURL: dirURL)
         let expectedKey = "nested/nested2/d.txt"
         XCTAssertEqual(resolvedKey, expectedKey)
     }
 
-    func testGetResolvedObjectKeyCustomS3DelimiterNilPrefix() throws {
-        let (fileURL, dirURL) = try getResolvedObjectKeyTestURLs()
-        let resolvedKey = try getResolvedObjectKeyTestHelper(fileURL: fileURL, dirURL: dirURL, s3Delimiter: "-")
-        let expectedKey = "nested-nested2-d.txt"
-        XCTAssertEqual(resolvedKey, expectedKey)
-    }
-
-    func testGetResolvedObjectKeyDefaultS3DelimiterWithPrefix() throws {
+    func testGetResolvedObjectKeyWithPrefix() throws {
         let (fileURL, dirURL) = try getResolvedObjectKeyTestURLs()
         let resolvedKey = try getResolvedObjectKeyTestHelper(fileURL: fileURL, dirURL: dirURL, s3Prefix: "pre")
         let expectedKey = "pre/nested/nested2/d.txt"
         XCTAssertEqual(resolvedKey, expectedKey)
-    }
-
-    func testGetResolvedObjectKeyCustomS3DelimiterWithPrefix() throws {
-        let (fileURL, dirURL) = try getResolvedObjectKeyTestURLs()
-        let resolvedKey = try getResolvedObjectKeyTestHelper(
-            fileURL: fileURL,
-            dirURL: dirURL,
-            s3Delimiter: "-",
-            s3Prefix: "pre"
-        )
-        let expectedKey = "pre-nested-nested2-d.txt"
-        XCTAssertEqual(resolvedKey, expectedKey)
-    }
-
-    func testGetResolvedObjectKeyThrowsInvalidFileNameError() throws {
-        let (fileURL, dirURL) = try getResolvedObjectKeyTestURLs()
-        do {
-            _ = try getResolvedObjectKeyTestHelper(fileURL: fileURL, dirURL: dirURL, s3Delimiter: ".")
-            XCTFail("Expected S3TMUploadDirectoryError.InvalidFileName error.")
-        } catch S3TMUploadDirectoryError.InvalidFileName {
-            // Caught expected error; no-op.
-        }
     }
 
     // Helpers for getResolvedObjectKey tests.
@@ -251,14 +222,12 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
     private func getResolvedObjectKeyTestHelper(
         fileURL: URL,
         dirURL: URL,
-        s3Delimiter: String = UploadDirectoryUnitTests.tm.defaultPathSeparator(),
         s3Prefix: String? = nil
     ) throws -> String {
         let input = try UploadDirectoryInput(
             bucket: "dummy",
             source: dirURL,
-            s3Prefix: s3Prefix,
-            s3Delimiter: s3Delimiter
+            s3Prefix: s3Prefix
         )
         return try UploadDirectoryUnitTests.tm.getResolvedObjectKey(of: fileURL, inDir: dirURL, input: input)
     }

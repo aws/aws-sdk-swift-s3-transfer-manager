@@ -23,8 +23,6 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     public let recursive: Bool
     /// The common prefix that gets prepended to object keys of all uploaded S3 objects.
     public let s3Prefix: String?
-    /// The delimiter that replaces the default path separator `"/"` in object keys of all uploaded S3 objects.
-    public let s3Delimiter: String
     /// The closure that allows customizing each individual `UploadObjectinput` used behind the scenes for each `uploadObject` transfer operation.
     public let uploadObjectRequestModifier: @Sendable (UploadObjectInput) -> UploadObjectInput
     /// The closure that handles each `uploadObject` transfer failure.
@@ -42,7 +40,6 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     ///   - followSymbolicLinks: The flag for whether to follow symlinks or not. Default value is `false`.
     ///   - recursive: The flag for whether to recursively upload `source` including contents of all subdirectories. Default value is `false`.
     ///   - s3Prefix: The S3 key prefix prepended to object keys during uploads. E.g., if this value is set to `"pre-"`, `source` is set to `/dir1`, and the file being uploaded is `/dir1/dir2/file.txt`, then the uploaded S3 object would have the key `pre-dir2/file.txt`. Default value is `nil`.
-    ///   - s3Delimiter: The path separator to use in the object key. E.g., if `source` is `/dir1`, `s3Delimiter` is `"-"`, and the file being uploaded is `/dir1/dir2/dir3/dir4/file.txt`, then the uploaded S3 object will have the key `dir2-dir3-dir4-file.txt`. Default value is `"/"`, which is the system default path separator for all Apple platforms and Linux distros.
     ///   - uploadObjectRequestModifier: A closure that allows customizing the individual `UploadObjectInput` passed to each `uploadObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `UploadObjectInput` without modification.
     ///   - failurePolicy: A closure that handles `uploadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest()`, which simply bubbles up the error to the caller and terminates the entire `uploadDirectory` operation.
     ///   - directoryTransferListeners: An array of `UploadDirectoryTransferListener`. The transfer status and progress of the directory transfer operation will be published to each transfer listener provided here. Default value is an empty array.
@@ -53,7 +50,6 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         followSymbolicLinks: Bool = false,
         recursive: Bool = false,
         s3Prefix: String? = nil,
-        s3Delimiter: String = "/",
         uploadObjectRequestModifier: @Sendable @escaping (UploadObjectInput) -> UploadObjectInput = { input in
             return input
         },
@@ -69,7 +65,6 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         self.followSymbolicLinks = followSymbolicLinks
         self.recursive = recursive
         self.s3Prefix = s3Prefix
-        self.s3Delimiter = s3Delimiter
         self.uploadObjectRequestModifier = uploadObjectRequestModifier
         self.failurePolicy = failurePolicy
         self.directoryTransferListeners = directoryTransferListeners
