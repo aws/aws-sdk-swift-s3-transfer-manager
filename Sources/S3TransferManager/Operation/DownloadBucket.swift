@@ -310,14 +310,14 @@ public extension S3TransferManager {
             throw S3TMDownloadBucketError.FailedToCreateOutputStreamForFileURL(url: pair.value)
         }
         let operationID = input.id + "-\(operationNumber)"
-        let downloadObjectInput = DownloadObjectInput(
+        let downloadObjectInput = input.downloadObjectRequestModifier(DownloadObjectInput(
             id: operationID,
             outputStream: outputStream,
             bucket: input.bucket,
             checksumMode: config.responseChecksumValidation == .whenSupported ? .enabled : .sdkUnknown("DISABLED"),
             key: pair.key,
             transferListeners: await input.objectTransferListenerFactory()
-        )
+        ))
         do {
             // Create S3TM `downloadObject` task and await its completion before returning.
             let downloadObjectTask = try downloadObject(input: downloadObjectInput)

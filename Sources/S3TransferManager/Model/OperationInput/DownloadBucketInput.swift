@@ -23,8 +23,8 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     public let s3Delimiter: String
     /// The closure used to skip downloading S3 objects that meet the filter criteria. The returned boolean determined whether the object gets downloaded or not (i.e., `true` to downoad, `false` to filter out).
     public let filter: @Sendable (S3ClientTypes.Object) -> Bool
-    /// The closure that allows customizing each individual `GetObjectInput` used behind the scenes for each `downloadObject` transfer operation.
-    public let getObjectRequestCallback: @Sendable (GetObjectInput) -> GetObjectInput
+    /// The closure that allows customizing each individual `DownloadObjectInput` used behind the scenes for each `downloadObject` transfer operation.
+    public let downloadObjectRequestModifier: @Sendable (DownloadObjectInput) -> DownloadObjectInput
     /// The closure that handles each `downloadObject` transfer failure.
     public let failurePolicy: FailurePolicy<DownloadBucketInput>
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on directory transfer status and progress.
@@ -40,7 +40,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     ///   - s3Prefix: If non-nil, only the S3 objects that have this prefix will be downloaded. All downloaded files will be saved to the `destination` with this prefix removed from the file names. E.g., if `destination` is `"/dir1/dir2/"` and `s3Prefix` is `"dir3/dir4"`, and object key is `"dir3/dir4/dir5/file.txt"`, the object will be saved to `"/dir1/dir2/dir5/file.txt"`, which is destination + (object key - prefix). Default value is `nil`, meaning every object in the bucket will be downloaded.
     ///   - s3Delimiter: Specifies what delimiter is used by the S3 objects you want to download. Objects will be saved to the file location resolved by replacing the specified `s3Delimiter` with system default path separator `"/"`. E.g., if `destination` is `"/dir1"`, `s3Delimiter` is `"-"`, and the key of the S3 object being downloaded is `"dir2-dir3-dir4-file.txt"`, the object will be saved to `"/dir1/dir2/dir3/dir4/file.txt"`.  Default value is `"/"`, which is the system default path separator for all Apple platforms and Linux distros.
     ///   - filter: A closure that allows skipping unwanted S3 objects. Skipped objects do not get downloaded. Default behavior is a closure that just returns `true`, which filters nothing.
-    ///   - getObjectRequestCallback: A closure that allows customizing the individual `GetObjectInput` passed to each part or range `getObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `GetObjectInput` without modification.
+    ///   - downloadObjectRequestModifier: A closure that allows customizing the individual `DownloadObjectInput` passed to each `downloadObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `DownloadObjectInput` without modification.
     ///   - failurePolicy: A closure that handles `downloadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest()`, which simply bubbles up the error to the caller and terminates the entire `downloadBucket` operation.
     ///   - directoryTransferListeners: An array of `DownloadBucketTransferListener`. The transfer status and progress of the directory transfer operation will be published to each transfer listener provided here. Default value is an empty array.
     ///   - objectTransferListenerFactory: A closure that creates and returns an array of `DownloadObjectTransferListener` instances for each indiviual object transfer. The transfer status and progress of each individual object transfer operation will be published to the listeners created here. Default is a closure that returns an empty array.
@@ -50,7 +50,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         s3Prefix: String? = nil,
         s3Delimiter: String = "/",
         filter: @Sendable @escaping (S3ClientTypes.Object) -> Bool = { _ in return true },
-        getObjectRequestCallback: @Sendable @escaping (GetObjectInput) -> GetObjectInput = { input in
+        downloadObjectRequestModifier: @Sendable @escaping (DownloadObjectInput) -> DownloadObjectInput = { input in
             return input
         },
         failurePolicy: @escaping FailurePolicy<DownloadBucketInput> = CannedFailurePolicy
@@ -65,7 +65,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         self.s3Prefix = s3Prefix
         self.s3Delimiter = s3Delimiter
         self.filter = filter
-        self.getObjectRequestCallback = getObjectRequestCallback
+        self.downloadObjectRequestModifier = downloadObjectRequestModifier
         self.failurePolicy = failurePolicy
         self.directoryTransferListeners = directoryTransferListeners
         self.objectTransferListenerFactory = objectTransferListenerFactory

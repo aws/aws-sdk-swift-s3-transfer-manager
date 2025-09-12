@@ -216,17 +216,15 @@ public extension S3TransferManager {
 
         defer { try? fileHandle.close() }
 
-        let uploadObjectInput = UploadObjectInput(
+        let uploadObjectInput = input.uploadObjectRequestModifier(UploadObjectInput(
             id: input.id + "-\(operationNumber)",
-            // This is the callback that allows custom modifications of
-            //  the individual `PutObjectInput` structs for the SDK user.
             body: .stream(FileStream(fileHandle: fileHandle)),
             bucket: input.bucket,
             // CRC32 is SDK-default algorithm; this can be overwritten in callback by users.
             checksumAlgorithm: .crc32,
             key: resolvedObjectKey,
             transferListeners: await input.objectTransferListenerFactory()
-        )
+        ))
 
         do {
             // Create S3TM `uploadObject` task and await its completion before returning.
