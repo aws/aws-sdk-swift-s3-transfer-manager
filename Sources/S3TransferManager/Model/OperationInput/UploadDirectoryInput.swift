@@ -31,6 +31,8 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     public let directoryTransferListeners: [UploadDirectoryTransferListener]
     /// The transfer listener factory closure called by `S3TransferManager` to create listeners for individual object transfer. Use to upload status and progress of individual objects in the directory.
     public let objectTransferListenerFactory: @Sendable () async -> [UploadObjectTransferListener]
+    /// The maximum number of concurrent `uploadObject` requests to spin up for the `uploadDirectory` request.
+    public let maxConcurrency: Int
 
     /// Initializes `UploadDirectoryInput` with provided parameters.
     ///
@@ -44,6 +46,7 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     ///   - failurePolicy: A closure that handles `uploadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest()`, which simply bubbles up the error to the caller and terminates the entire `uploadDirectory` operation.
     ///   - directoryTransferListeners: An array of `UploadDirectoryTransferListener`. The transfer status and progress of the directory transfer operation will be published to each transfer listener provided here. Default value is an empty array.
     ///   - objectTransferListenerFactory: A closure that creates and returns an array of `UploadObjectTransferListener` instances for each individual object transfer. The transfer status and progress of each individual object transfer operation will be published to the listeners created here. Default is a closure that returns an empty array.
+    ///   - maxConcurrency: The maximum number of concurrent `uploadObject` requests to spin up for the `uploadDirectory` request. Default value is `50`.
     public init(
         bucket: String,
         source: URL,
@@ -58,7 +61,8 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         directoryTransferListeners: [UploadDirectoryTransferListener] = [],
         objectTransferListenerFactory: @Sendable @escaping () async -> [UploadObjectTransferListener] = {
             []
-        }
+        },
+        maxConcurrency: Int = 50
     ) throws {
         self.bucket = bucket
         self.source = source
@@ -69,6 +73,7 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         self.failurePolicy = failurePolicy
         self.directoryTransferListeners = directoryTransferListeners
         self.objectTransferListenerFactory = objectTransferListenerFactory
+        self.maxConcurrency = maxConcurrency
         try validateSourceURL(source)
     }
 

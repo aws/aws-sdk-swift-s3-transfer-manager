@@ -78,17 +78,17 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
         XCTAssertEqual(Set(fetchedURLs), expectedURLs)
     }
 
-    // MARK: - getNestedFileURLs tests.
+    // MARK: - discoverFilesProgressively tests.
 
     /*
-         Expected results for getNestedFileURLs on source/ with recursive & followSymbolicLinks set to true :
+         Expected results for discoverFilesProgressively on source/ with recursive & followSymbolicLinks set to true :
          - source/nested/nested2/d.txt
          - source/nested/b.txt
          - source/a.txt
          - source/symlinkToOutsideSourceDir/c.txt
          - source/symlinkToOutsideSourceDir/e.txt
 
-         Using above directory structure with getNestedFileURLs tests:
+         Using above directory structure with discoverFilesProgressively tests:
          - Top-level regular file
          - Top-level directory
          - Nested regular file
@@ -97,13 +97,19 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
          - Symlink to file outside of source
          - Symlinks that causes infinite loops
      */
-    func testGetNestedFileURLsRecursiveAndFollowSymlinks() throws {
+    func testDiscoverFilesProgressivelyRecursiveAndFollowSymlinks() async throws {
         let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
-        let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
+        let fileDiscovery = UploadDirectoryUnitTests.tm.discoverFilesProgressively(
             in: sourceURL,
             recursive: true,
             followSymbolicLinks: true
         )
+        
+        var fetchedURLs: [URL] = []
+        for try await fileURL in fileDiscovery {
+            fetchedURLs.append(fileURL)
+        }
+        
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/nested2/d.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/b.txt"))!,
@@ -120,18 +126,24 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
     }
 
     /*
-         Expected results for getNestedFileURLs on source/ with only recursive set to true :
+         Expected results for discoverFilesProgressively on source/ with only recursive set to true :
          - source/nested/nested2/d.txt
          - source/nested/b.txt
          - source/a.txt
      */
-    func testGetNestedFileURLsRecursiveOnly() throws {
+    func testDiscoverFilesProgressivelyRecursiveOnly() async throws {
         let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
-        let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
+        let fileDiscovery = UploadDirectoryUnitTests.tm.discoverFilesProgressively(
             in: sourceURL,
             recursive: true,
             followSymbolicLinks: false
         )
+        
+        var fetchedURLs: [URL] = []
+        for try await fileURL in fileDiscovery {
+            fetchedURLs.append(fileURL)
+        }
+        
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/nested2/d.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/b.txt"))!,
@@ -145,17 +157,23 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
     }
 
     /*
-         Expected results for getNestedFileURLs on source/ with only followSymbolicLinks set to true :
+         Expected results for discoverFilesProgressively on source/ with only followSymbolicLinks set to true :
          - source/a.txt
          - source/symlinkToFileD
      */
-    func testGetNestedFileURLsFollowSymlinksOnly() throws {
+    func testDiscoverFilesProgressivelyFollowSymlinksOnly() async throws {
         let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
-        let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
+        let fileDiscovery = UploadDirectoryUnitTests.tm.discoverFilesProgressively(
             in: sourceURL,
             recursive: false,
             followSymbolicLinks: true
         )
+        
+        var fetchedURLs: [URL] = []
+        for try await fileURL in fileDiscovery {
+            fetchedURLs.append(fileURL)
+        }
+        
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("a.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("symlinkToFileF"))!
@@ -168,16 +186,22 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
     }
 
     /*
-         Expected results for getNestedFileURLs on source/ with neither option set to true :
+         Expected results for discoverFilesProgressively on source/ with neither option set to true :
          - source/a.txt
      */
-    func testGetNestedFileURLsNeitherOptionsSet() throws {
+    func testDiscoverFilesProgressivelyNeitherOptionsSet() async throws {
         let sourceURL = resourceDirectoryURL.appendingPathComponent("source")
-        let fetchedURLs = try UploadDirectoryUnitTests.tm.getNestedFileURLs(
+        let fileDiscovery = UploadDirectoryUnitTests.tm.discoverFilesProgressively(
             in: sourceURL,
             recursive: false,
             followSymbolicLinks: false
         )
+        
+        var fetchedURLs: [URL] = []
+        for try await fileURL in fileDiscovery {
+            fetchedURLs.append(fileURL)
+        }
+        
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("a.txt"))!
         ]
