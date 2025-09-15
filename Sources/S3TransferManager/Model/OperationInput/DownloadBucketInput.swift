@@ -29,6 +29,8 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     public let directoryTransferListeners: [DownloadBucketTransferListener]
     /// The transfer listener factory closure called by `S3TransferManager` to create listeners for individual object transfer. Use to track download status and progress of individual objects in the bucket.
     public let objectTransferListenerFactory: @Sendable () async -> [DownloadObjectTransferListener]
+    /// The maximum number of concurrent `downloadObject` requests to spin up for the `downloadBucket` request.
+    public let maxConcurrency: Int
 
     /// Initializes `DownloadBucketInput` with provided parameters.
     ///
@@ -41,6 +43,7 @@ public struct DownloadBucketInput: Sendable, Identifiable {
     ///   - failurePolicy: A closure that handles `downloadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest()`, which simply bubbles up the error to the caller and terminates the entire `downloadBucket` operation.
     ///   - directoryTransferListeners: An array of `DownloadBucketTransferListener`. The transfer status and progress of the directory transfer operation will be published to each transfer listener provided here. Default value is an empty array.
     ///   - objectTransferListenerFactory: A closure that creates and returns an array of `DownloadObjectTransferListener` instances for each indiviual object transfer. The transfer status and progress of each individual object transfer operation will be published to the listeners created here. Default is a closure that returns an empty array.
+    ///   - maxConcurrency: The maximum number of concurrent `downloadObject` requests to spin up for the `downloadBucket` request. Default value is `50`.
     public init(
         bucket: String,
         destination: URL,
@@ -54,7 +57,8 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         directoryTransferListeners: [DownloadBucketTransferListener] = [],
         objectTransferListenerFactory: @Sendable @escaping () async -> [DownloadObjectTransferListener] = {
             []
-        }
+        },
+        maxConcurrency: Int = 50
     ) {
         self.bucket = bucket
         self.destination = destination
@@ -64,5 +68,6 @@ public struct DownloadBucketInput: Sendable, Identifiable {
         self.failurePolicy = failurePolicy
         self.directoryTransferListeners = directoryTransferListeners
         self.objectTransferListenerFactory = objectTransferListenerFactory
+        self.maxConcurrency = maxConcurrency
     }
 }

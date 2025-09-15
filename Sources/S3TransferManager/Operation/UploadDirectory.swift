@@ -41,7 +41,7 @@ public extension S3TransferManager {
 
                     for try await fileURL in fileDiscovery {
                         // Wait if we've hit the concurrent uploadObject limit.
-                        while await uploadTracker.activeCount >= maxConcurrentUploads {
+                        while await uploadTracker.activeTransferCount >= maxConcurrentUploads {
                             _ = try await group.next()
                         }
 
@@ -61,7 +61,7 @@ public extension S3TransferManager {
                     }
 
                     // Wait for remaining uploads
-                    while await uploadTracker.activeCount > 0 {
+                    while await uploadTracker.activeTransferCount > 0 {
                         _ = try await group.next()
                         await uploadTracker.decrement()
                     }
@@ -278,14 +278,14 @@ public extension S3TransferManager {
 }
 
 private actor UploadTracker {
-    private(set) var activeCount = 0
+    private(set) var activeTransferCount = 0
     
     func increment() {
-        activeCount += 1
+        activeTransferCount += 1
     }
     
     func decrement() {
-        activeCount -= 1
+        activeTransferCount -= 1
     }
 }
 
