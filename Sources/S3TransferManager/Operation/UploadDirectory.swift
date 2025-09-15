@@ -49,9 +49,9 @@ public extension S3TransferManager {
                         await uploadTracker.increment()
                         group.addTask {
                             do {
-                                let result = try await self.uploadObjectTask(input, currentOpNum, fileURL, results)
+                                try await self.uploadObjectTask(input, currentOpNum, fileURL, results)
                                 await uploadTracker.decrement()
-                                return result
+                                return
                             } catch {
                                 await uploadTracker.decrement()
                                 throw error

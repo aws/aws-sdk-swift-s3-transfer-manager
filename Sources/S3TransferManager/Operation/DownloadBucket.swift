@@ -59,11 +59,11 @@ public extension S3TransferManager {
                         await downloadTracker.increment()
                         group.addTask {
                             do {
-                                let result = try await self.downloadObjectTask(
+                                try await self.downloadObjectTask(
                                     input, (objectKey, tempFileURL), currentOpNum, results
                                 )
                                 await downloadTracker.decrement()
-                                return result
+                                return
                             } catch {
                                 await downloadTracker.decrement()
                                 throw error
