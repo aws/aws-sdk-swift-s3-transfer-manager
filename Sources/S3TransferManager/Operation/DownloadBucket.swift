@@ -36,9 +36,9 @@ public extension S3TransferManager {
 
             let results = Results()
             let downloadTracker = DownloadTracker()
-            
+
             try validateOrCreateDestinationDirectory(input: input)
-            
+
             let objectDiscovery = discoverObjectsProgressively(input: input)
             var createdTempFiles: [URL] = []
 
@@ -49,7 +49,7 @@ public extension S3TransferManager {
 
                     for try await (objectKey, tempFileURL) in objectDiscovery {
                         createdTempFiles.append(tempFileURL)
-                        
+
                         // Wait if we've hit the concurrent downloadObject limit
                         while await downloadTracker.activeTransferCount >= maxConcurrentDownloads {
                             _ = try await group.next()
@@ -59,7 +59,9 @@ public extension S3TransferManager {
                         await downloadTracker.increment()
                         group.addTask {
                             do {
-                                let result = try await self.downloadObjectTask(input, (objectKey, tempFileURL), currentOpNum, results)
+                                let result = try await self.downloadObjectTask(
+                                    input, (objectKey, tempFileURL), currentOpNum, results
+                                )
                                 await downloadTracker.decrement()
                                 return result
                             } catch {
@@ -151,12 +153,12 @@ public extension S3TransferManager {
                             bucket: input.bucket,
                             prefix: input.s3Prefix
                         ))
-                        
+
                         for try await output in paginatorOutputs {
                             guard let contents = output.contents else {
                                 throw S3TMDownloadBucketError.FailedToRetrieveObjectsUsingListObjectsV2
                             }
-                            
+
                             for object in contents {
                                 if let (objectKey, tempFileURL) = try processObject(object, input: input) {
                                     continuation.yield((objectKey, tempFileURL))
@@ -172,29 +174,29 @@ public extension S3TransferManager {
             }
         }
     }
-    
+
     private func processObject(
         _ object: S3ClientTypes.Object,
         input: DownloadBucketInput
     ) throws -> (String, URL)? {
         let originalKey = object.key!
         let delimiter = "/"
-        
+
         // Use user-provided filter to skip objects
         if !input.filter(object) || originalKey.hasSuffix(delimiter) {
             return nil
         }
-        
+
         let relativeFilePath = originalKey.removePrefix(input.s3Prefix ?? "")
-        
+
         // If relativeFilePath escapes destination directory, skip it
         if filePathEscapesDestination(filePath: relativeFilePath) {
             return nil
         }
-        
+
         let resolvedFileURL = URL(string: input.destination.absoluteString.appendingPathComponent(relativeFilePath))!
         let tempFileURL = try createDestinationFile(originalURL: resolvedFileURL)
-        
+
         return (originalKey, tempFileURL)
     }
 
@@ -366,11 +368,11 @@ public extension S3TransferManager {
 
 private actor DownloadTracker {
     private(set) var activeTransferCount = 0
-    
+
     func increment() {
         activeTransferCount += 1
     }
-    
+
     func decrement() {
         activeTransferCount -= 1
     }

@@ -104,12 +104,12 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
             recursive: true,
             followSymbolicLinks: true
         )
-        
+
         var fetchedURLs: [URL] = []
         for try await fileURL in fileDiscovery {
             fetchedURLs.append(fileURL)
         }
-        
+
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/nested2/d.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/b.txt"))!,
@@ -138,12 +138,12 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
             recursive: true,
             followSymbolicLinks: false
         )
-        
+
         var fetchedURLs: [URL] = []
         for try await fileURL in fileDiscovery {
             fetchedURLs.append(fileURL)
         }
-        
+
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/nested2/d.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("nested/b.txt"))!,
@@ -168,12 +168,12 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
             recursive: false,
             followSymbolicLinks: true
         )
-        
+
         var fetchedURLs: [URL] = []
         for try await fileURL in fileDiscovery {
             fetchedURLs.append(fileURL)
         }
-        
+
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("a.txt"))!,
             URL(string: sourceURL.absoluteString.appendingPathComponent("symlinkToFileF"))!
@@ -196,12 +196,12 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
             recursive: false,
             followSymbolicLinks: false
         )
-        
+
         var fetchedURLs: [URL] = []
         for try await fileURL in fileDiscovery {
             fetchedURLs.append(fileURL)
         }
-        
+
         let expectedURLs: Set<URL> = [
             URL(string: sourceURL.absoluteString.appendingPathComponent("a.txt"))!
         ]

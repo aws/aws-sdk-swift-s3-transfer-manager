@@ -11,8 +11,6 @@ import class Foundation.FileManager
 @testable import S3TransferManager
 
 class DownloadBucketUnitTests: S3TMUnitTestCase {
-
-
     // MARK: - validateOrCreateDestinationDirectory tests.
 
     func testValidateOrCreateDestinationDirectoryWithExistingDirectoryURL() throws {

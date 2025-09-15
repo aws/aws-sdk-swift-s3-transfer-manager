@@ -139,35 +139,37 @@ public extension S3TransferManager {
             Task {
                 var visitedURLs = Set<String>()
                 var directoryQueue: [URL] = [source]
-                
+
                 visitedURLs.insert(source.resolvingSymlinksInPath().absoluteString)
-                
+
                 while !directoryQueue.isEmpty {
                     let currentDir = directoryQueue.removeFirst()
-                    
+
                     do {
                         let currentDirProperties = try currentDir.resourceValues(forKeys: [.isSymbolicLinkKey])
                         let isSymlink = currentDirProperties.isSymbolicLink ?? false
-                        
+
                         let nestedURLs = try getDirectlyNestedURLs(in: currentDir, isSymlink: isSymlink)
-                        
+
                         for originalURL in nestedURLs {
                             let originalURLProperties = try originalURL.resourceValues(forKeys: [.isSymbolicLinkKey])
                             let originalURLIsSymlink = originalURLProperties.isSymbolicLink ?? false
-                            
+
                             if originalURLIsSymlink && !followSymbolicLinks {
                                 continue
                             }
-                            
+
                             let resolvedURL = originalURL.resolvingSymlinksInPath()
                             guard !visitedURLs.contains(resolvedURL.absoluteString) else {
                                 logger.debug("Skipping a duplicate URL: \(originalURL).")
                                 continue
                             }
                             visitedURLs.insert(resolvedURL.absoluteString)
-                            
-                            let properties = try resolvedURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
-                            
+
+                            let properties = try resolvedURL.resourceValues(
+                                forKeys: [.isDirectoryKey, .isRegularFileKey]
+                            )
+
                             if properties.isRegularFile ?? false {
                                 continuation.yield(originalURL)
                             } else if (properties.isDirectory ?? false) && recursive {
@@ -279,11 +281,11 @@ public extension S3TransferManager {
 
 private actor UploadTracker {
     private(set) var activeTransferCount = 0
-    
+
     func increment() {
         activeTransferCount += 1
     }
-    
+
     func decrement() {
         activeTransferCount -= 1
     }
