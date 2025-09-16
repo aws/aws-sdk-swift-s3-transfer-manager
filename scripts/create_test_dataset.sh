@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Create test dataset with nested subfolders and large files
-# GitHub Actions compatible version
+# Used by DirectoryTransferIntegrationTests.swift.
 
 # Use $HOME for local development, temp directory for GitHub Actions
 if [ "$GITHUB_ACTIONS" = "true" ]; then
