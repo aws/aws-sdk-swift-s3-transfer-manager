@@ -11,6 +11,7 @@ import S3TransferManager
 @testable import TestUtil
 import XCTest
 
+#if os(macOS) || os(Linux)
 class DirectoryTransferIntegrationTests: XCTestCase {
     var tm: S3TransferManager!
     var testDatasetURL: URL!
@@ -57,10 +58,6 @@ class DirectoryTransferIntegrationTests: XCTestCase {
     }
 
     func testUploadAndDownloadNestedDataset() async throws {
-        #if !os(macOS) && !os(Linux)
-        throw XCTSkip("This test only runs on macOS and Linux")
-        #endif
-
         // Create S3 bucket
         let s3 = try S3Client(region: region)
         _ = try await s3.createBucket(input: CreateBucketInput(
@@ -186,3 +183,4 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         _ = try await s3.deleteBucket(input: DeleteBucketInput(bucket: bucketName))
     }
 }
+#endif
