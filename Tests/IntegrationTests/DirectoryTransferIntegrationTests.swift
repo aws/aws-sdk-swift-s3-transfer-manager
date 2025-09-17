@@ -137,18 +137,44 @@ class DirectoryTransferIntegrationTests: XCTestCase {
 
         XCTAssertEqual(originalFiles.count, downloadedFiles.count, "File count mismatch")
 
-        // Verify each file exists and has correct size
+        // Step 1: Get the base path components for both directories
+        // Example: testDatasetURL = "/private/var/.../test_dataset" -> ["private", "var", ..., "test_dataset"]
+        let sourceBaseComponents = testDatasetURL.pathComponents
+        let destBaseComponents = downloadDestinationURL.pathComponents
+
+        // Step 2: Create a lookup map of downloaded files by their relative path structure
+        // This allows us to find downloaded files by their directory structure, not absolute paths
+        var downloadedFileMap: [[String]: URL] = [:]
+
+        for downloadedFile in downloadedFiles {
+            // Get all path components: ["/", "var", "folders", ..., "download-dest", "department_1", "doc.dat"]
+            let fullComponents = downloadedFile.pathComponents
+
+            // Remove the base destination path to get relative structure
+            // Example: ["department_1", "doc.dat"]
+            let relativeComponents = Array(fullComponents.dropFirst(destBaseComponents.count))
+
+            // Store in map: ["department_1", "doc.dat"] -> URL
+            downloadedFileMap[relativeComponents] = downloadedFile
+        }
+
+        // Step 3: For each original file, find its matching downloaded file by structure
         for originalFile in originalFiles {
-            let relativePath = originalFile.path.replacingOccurrences(of: testDatasetURL.path + "/", with: "")
-            let downloadedFile = downloadDestinationURL.appendingPathComponent(relativePath)
+            // Get relative path components from original file
+            let fullComponents = originalFile.pathComponents
+            let relativeComponents = Array(fullComponents.dropFirst(sourceBaseComponents.count))
 
-            XCTAssertTrue(
-                FileManager.default.fileExists(atPath: downloadedFile.path),
-                "Downloaded file missing: \(relativePath)"
-            )
+            // Look up the downloaded file with the same relative structure
+            guard let downloadedFile = downloadedFileMap[relativeComponents] else {
+                let relativePath = relativeComponents.joined(separator: "/")
+                XCTFail("Downloaded file missing for relative path: \(relativePath)")
+                continue
+            }
 
+            // Verify file sizes match
             let originalSize = try originalFile.resourceValues(forKeys: [.fileSizeKey]).fileSize
             let downloadedSize = try downloadedFile.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            let relativePath = relativeComponents.joined(separator: "/")
             XCTAssertEqual(originalSize, downloadedSize, "File size mismatch: \(relativePath)")
         }
     }
