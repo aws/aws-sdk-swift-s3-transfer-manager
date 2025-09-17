@@ -49,7 +49,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
 
     override func tearDown() async throws {
         // Cleanup S3 bucket if it exists
-        if let bucketName = bucketName {
+        if bucketName != nil {
             let s3 = try S3Client(region: region)
             try? await cleanupBucket(s3: s3)
         }
@@ -135,12 +135,21 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         let originalFiles = getAllFiles(in: testDatasetURL)
         let downloadedFiles = getAllFiles(in: downloadDestinationURL)
 
+        // Temporary debugging code for GitHubActions
+        print("ORIGINALFILES[0] = \(originalFiles[0])")
+        print("DOWNLOADEDFILES[0] = \(downloadedFiles[0])")
+        print("TestDatasetURL = \(testDatasetURL!)")
+        print("DownloadDestinationURL = \(downloadDestinationURL!)")
+
         XCTAssertEqual(originalFiles.count, downloadedFiles.count, "File count mismatch")
 
         // Step 1: Get the base path components for both directories
         // Example: testDatasetURL = "/private/var/.../test_dataset" -> ["private", "var", ..., "test_dataset"]
         let sourceBaseComponents = testDatasetURL.pathComponents
         let destBaseComponents = downloadDestinationURL.pathComponents
+
+        print("SourceBaseComponents = \(sourceBaseComponents)")
+        print("DestBaseComponents = \(destBaseComponents)")
 
         // Step 2: Create a lookup map of downloaded files by their relative path structure
         // This allows us to find downloaded files by their directory structure, not absolute paths
