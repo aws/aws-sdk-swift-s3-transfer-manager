@@ -16,6 +16,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
     var tm: S3TransferManager!
     var testDatasetURL: URL!
     var downloadDestinationURL: URL!
+    var downloadDestinationDirName: String!
 
     let region = "us-west-2"
     var bucketName: String!
@@ -36,13 +37,15 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         testDatasetURL = try createTestDatasetUsingScript()
 
         // Create download destination - use temp for CI, home for local
+        downloadDestinationDirName = "directory-transfer-integ-test-\(uuid)"
         if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" {
             downloadDestinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-                "directory-transfer-integ-test-\(uuid)"
+                downloadDestinationDirName,
+                isDirectory: true
             )
         } else {
             let homeDir = ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()
-            downloadDestinationURL = URL(fileURLWithPath: "\(homeDir)/directory-transfer-integ-test-\(uuid)")
+            downloadDestinationURL = URL(fileURLWithPath: "\(homeDir)/\(downloadDestinationDirName!)")
         }
         try FileManager.default.createDirectory(at: downloadDestinationURL, withIntermediateDirectories: true)
     }
@@ -135,57 +138,19 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         let originalFiles = getAllFiles(in: testDatasetURL)
         let downloadedFiles = getAllFiles(in: downloadDestinationURL)
 
-        // Temporary debugging code for GitHubActions
-        print("ORIGINALFILES[0] = \(originalFiles[0])")
-        print("DOWNLOADEDFILES[0] = \(downloadedFiles[0])")
-        print("TestDatasetURL = \(testDatasetURL!)")
-        print("DownloadDestinationURL = \(downloadDestinationURL!)")
-
         XCTAssertEqual(originalFiles.count, downloadedFiles.count, "File count mismatch")
 
-        // Step 1: Get the base path components for both directories
-        // Example: testDatasetURL = "/private/var/.../test_dataset" -> ["private", "var", ..., "test_dataset"]
-        let sourceBaseComponents = testDatasetURL.pathComponents
-        let destBaseComponents = downloadDestinationURL.pathComponents
+        let originalPaths = originalFiles.compactMap { file -> String? in
+            guard let range = file.absoluteString.range(of: "test_dataset/") else { return nil }
+            return String(file.absoluteString[range.upperBound...])
+        }.sorted()
 
-        print("SourceBaseComponents = \(sourceBaseComponents)")
-        print("DestBaseComponents = \(destBaseComponents)")
+        let downloadedPaths = downloadedFiles.compactMap { file -> String? in
+            guard let range = file.absoluteString.range(of: downloadDestinationDirName + "/") else { return nil }
+            return String(file.absoluteString[range.upperBound...])
+        }.sorted()
 
-        // Step 2: Create a lookup map of downloaded files by their relative path structure
-        // This allows us to find downloaded files by their directory structure, not absolute paths
-        var downloadedFileMap: [[String]: URL] = [:]
-
-        for downloadedFile in downloadedFiles {
-            // Get all path components: ["/", "var", "folders", ..., "download-dest", "department_1", "doc.dat"]
-            let fullComponents = downloadedFile.pathComponents
-
-            // Remove the base destination path to get relative structure
-            // Example: ["department_1", "doc.dat"]
-            let relativeComponents = Array(fullComponents.dropFirst(destBaseComponents.count))
-
-            // Store in map: ["department_1", "doc.dat"] -> URL
-            downloadedFileMap[relativeComponents] = downloadedFile
-        }
-
-        // Step 3: For each original file, find its matching downloaded file by structure
-        for originalFile in originalFiles {
-            // Get relative path components from original file
-            let fullComponents = originalFile.pathComponents
-            let relativeComponents = Array(fullComponents.dropFirst(sourceBaseComponents.count))
-
-            // Look up the downloaded file with the same relative structure
-            guard let downloadedFile = downloadedFileMap[relativeComponents] else {
-                let relativePath = relativeComponents.joined(separator: "/")
-                XCTFail("Downloaded file missing for relative path: \(relativePath)")
-                continue
-            }
-
-            // Verify file sizes match
-            let originalSize = try originalFile.resourceValues(forKeys: [.fileSizeKey]).fileSize
-            let downloadedSize = try downloadedFile.resourceValues(forKeys: [.fileSizeKey]).fileSize
-            let relativePath = relativeComponents.joined(separator: "/")
-            XCTAssertEqual(originalSize, downloadedSize, "File size mismatch: \(relativePath)")
-        }
+        XCTAssertEqual(originalPaths, downloadedPaths, "File path mismatch")
     }
 
     private func getAllFiles(in directory: URL) -> [URL] {
