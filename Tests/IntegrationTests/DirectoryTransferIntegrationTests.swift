@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+import AWSS3
 import Foundation
 import S3TransferManager
 @testable import TestUtil
 import XCTest
-import AWSS3
 
 class DirectoryTransferIntegrationTests: XCTestCase {
     var tm: S3TransferManager!
