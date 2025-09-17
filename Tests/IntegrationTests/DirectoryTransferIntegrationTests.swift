@@ -48,6 +48,12 @@ class DirectoryTransferIntegrationTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        // Cleanup S3 bucket if it exists
+        if let bucketName = bucketName {
+            let s3 = try S3Client(region: region)
+            try? await cleanupBucket(s3: s3)
+        }
+
         // Cleanup local directories
         if let testDatasetURL = testDatasetURL {
             try? FileManager.default.removeItem(at: testDatasetURL)
@@ -95,9 +101,6 @@ class DirectoryTransferIntegrationTests: XCTestCase {
 
         // Verify file structure and content
         try await verifyDatasetIntegrity()
-
-        // Cleanup S3 bucket
-        try await cleanupBucket(s3: s3)
     }
 
     private func createTestDatasetUsingScript() throws -> URL {
@@ -169,6 +172,14 @@ class DirectoryTransferIntegrationTests: XCTestCase {
     }
 
     private func cleanupBucket(s3: S3Client) async throws {
+        // Check if bucket exists first
+        do {
+            _ = try await s3.headBucket(input: HeadBucketInput(bucket: bucketName))
+        } catch {
+            // Bucket doesn't exist, nothing to clean up
+            return
+        }
+
         // List and delete all objects
         let listOutput = try await s3.listObjectsV2(input: ListObjectsV2Input(bucket: bucketName))
         if let objects = listOutput.contents, !objects.isEmpty {
