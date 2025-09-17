@@ -22,19 +22,10 @@ class DirectoryTransferIntegrationTests: XCTestCase {
 
     override func setUp() async throws {
         let s3ClientConfig = try await S3Client.S3ClientConfiguration(region: region)
-
-        // Use smaller part sizes for GitHub Actions to test multipart behavior with smaller files
-        let tmConfig: S3TransferManagerConfig
-        if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" {
-            tmConfig = try await S3TransferManagerConfig(
-                s3ClientConfig: s3ClientConfig,
-                targetPartSizeBytes: 2 * 1024 * 1024,  // 2MB
-                multipartUploadThresholdBytes: 3 * 1024 * 1024  // 3MB
-            )
-        } else {
-            tmConfig = try await S3TransferManagerConfig(s3ClientConfig: s3ClientConfig)
-        }
-
+        let tmConfig = try await S3TransferManagerConfig(
+            s3ClientConfig: s3ClientConfig,
+            multipartUploadThresholdBytes: 10 * 1024 * 1024  // 10MB
+        )
         tm = S3TransferManager(config: tmConfig)
 
         let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
@@ -43,7 +34,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         // Create test dataset using script
         testDatasetURL = try createTestDatasetUsingScript()
 
-        // Create download destination - use $HOME for local, temp for GitHub Actions
+        // Create download destination - use temp for CI, home for local
         if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" {
             downloadDestinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(
                 "directory-transfer-integ-test-\(uuid)"
@@ -66,6 +57,10 @@ class DirectoryTransferIntegrationTests: XCTestCase {
     }
 
     func testUploadAndDownloadNestedDataset() async throws {
+        #if !os(macOS) && !os(Linux)
+        throw XCTSkip("This test only runs on macOS and Linux")
+        #endif
+
         // Create S3 bucket
         let s3 = try S3Client(region: region)
         _ = try await s3.createBucket(input: CreateBucketInput(
@@ -85,8 +80,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         let uploadTask = try tm.uploadDirectory(input: uploadInput)
         let uploadOutput = try await uploadTask.value
 
-        // Assert exact number based on GitHub Actions vs local environment
-        let expectedObjectCount = ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" ? 70 : 315
+        let expectedObjectCount = 315
         XCTAssertEqual(uploadOutput.objectsUploaded, expectedObjectCount)
         XCTAssertEqual(uploadOutput.objectsFailed, 0)
 
@@ -128,7 +122,6 @@ class DirectoryTransferIntegrationTests: XCTestCase {
             throw NSError(domain: "TestSetup", code: 1, userInfo: [NSLocalizedDescriptionKey: "Script failed"])
         }
 
-        // Script creates dataset at location based on GitHub Actions vs local environment
         if ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" {
             let tempDir = ProcessInfo.processInfo.environment["TMPDIR"] ?? "/tmp"
             return URL(fileURLWithPath: "\(tempDir)/test_dataset")

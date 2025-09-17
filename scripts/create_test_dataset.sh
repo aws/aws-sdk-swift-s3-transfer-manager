@@ -3,38 +3,24 @@
 # Create test dataset with nested subfolders and large files
 # Used by DirectoryTransferIntegrationTests.swift.
 
-# Use $HOME for local development, temp directory for GitHub Actions
+# Use temp directory for CI, home directory for local
 if [ "$GITHUB_ACTIONS" = "true" ]; then
     BASE_DIR="${TMPDIR:-/tmp}/test_dataset"
 else
     BASE_DIR="$HOME/test_dataset"
 fi
 
-# GitHub Actions parameters target 500MB total, local can be larger
-# GitHub Actions test dataset calculation:
-#   Num folders: 2 * (1 + 2 + 4) = 14 directories
-#   Num files: 14 directories * 5 files = 70 files
-#   Total size: 70 files * (3MB + 4MB)/2 = 245MB avg
-# Local test dataset calculation:
+# Test dataset calculation:
 #   Num folders: 3 * (1 + 2 + 4) = 21 directories
 #   Num files: 21 directories * 15 files = 315 files
 #   Total size: 315 files * (12MB + 18MB)/2 = 4.7GB avg
-if [ "$GITHUB_ACTIONS" = "true" ]; then
-    TOP_FOLDERS=2
-    NESTED_LEVELS=3
-    FILES_PER_FOLDER=5
-    MIN_SIZE_MB=3
-    MAX_SIZE_MB=4
-else
-    TOP_FOLDERS=3
-    NESTED_LEVELS=3
-    FILES_PER_FOLDER=15
-    MIN_SIZE_MB=12
-    MAX_SIZE_MB=18
-fi
+TOP_FOLDERS=3
+NESTED_LEVELS=3
+FILES_PER_FOLDER=15
+MIN_SIZE_MB=12
+MAX_SIZE_MB=18
 
 echo "Creating test dataset at $BASE_DIR..."
-echo "GitHub Actions mode: ${GITHUB_ACTIONS:-false}"
 rm -rf "$BASE_DIR"
 mkdir -p "$BASE_DIR"
 
