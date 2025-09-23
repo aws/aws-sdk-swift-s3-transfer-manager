@@ -23,16 +23,16 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     public let recursive: Bool
     /// The common prefix that gets prepended to object keys of all uploaded S3 objects.
     public let s3Prefix: String?
-    /// The delimiter that replaces the default path separator `"/"` in object keys of all uploaded S3 objects.
-    public let s3Delimiter: String
-    /// The closure that allows customizing each individual `PutObjectinput` used behind the scenes for each `uploadObject` transfer operation.
-    public let putObjectRequestCallback: @Sendable (PutObjectInput) -> PutObjectInput
+    /// The closure that allows customizing each individual `UploadObjectinput` used behind the scenes for each `uploadObject` transfer operation.
+    public let uploadObjectRequestModifier: @Sendable (UploadObjectInput) -> UploadObjectInput
     /// The closure that handles each `uploadObject` transfer failure.
     public let failurePolicy: FailurePolicy<UploadDirectoryInput>
     /// The list of transfer listeners whose callbacks will be called by `S3TransferManager` to report on directory transfer status and progress.
     public let directoryTransferListeners: [UploadDirectoryTransferListener]
     /// The transfer listener factory closure called by `S3TransferManager` to create listeners for individual object transfer. Use to upload status and progress of individual objects in the directory.
     public let objectTransferListenerFactory: @Sendable () async -> [UploadObjectTransferListener]
+    /// The maximum number of concurrent `uploadObject` requests to spin up for the `uploadDirectory` request.
+    public let maxConcurrency: Int
 
     /// Initializes `UploadDirectoryInput` with provided parameters.
     ///
@@ -42,19 +42,18 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
     ///   - followSymbolicLinks: The flag for whether to follow symlinks or not. Default value is `false`.
     ///   - recursive: The flag for whether to recursively upload `source` including contents of all subdirectories. Default value is `false`.
     ///   - s3Prefix: The S3 key prefix prepended to object keys during uploads. E.g., if this value is set to `"pre-"`, `source` is set to `/dir1`, and the file being uploaded is `/dir1/dir2/file.txt`, then the uploaded S3 object would have the key `pre-dir2/file.txt`. Default value is `nil`.
-    ///   - s3Delimiter: The path separator to use in the object key. E.g., if `source` is `/dir1`, `s3Delimiter` is `"-"`, and the file being uploaded is `/dir1/dir2/dir3/dir4/file.txt`, then the uploaded S3 object will have the key `dir2-dir3-dir4-file.txt`. Default value is `"/"`, which is the system default path separator for all Apple platforms and Linux distros.
-    ///   - putObjectRequestCallback: A closure that allows customizing the individual `PutObjectInput` passed to each part `putObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `PutObjectInput` without modification.
+    ///   - uploadObjectRequestModifier: A closure that allows customizing the individual `UploadObjectInput` passed to each `uploadObject` calls used behind the scenes. Default behavior is a no-op closure that returns provided `UploadObjectInput` without modification.
     ///   - failurePolicy: A closure that handles `uploadObject` operation failures. Default behavior is `CannedFailurePolicy.rethrowExceptionToTerminateRequest()`, which simply bubbles up the error to the caller and terminates the entire `uploadDirectory` operation.
     ///   - directoryTransferListeners: An array of `UploadDirectoryTransferListener`. The transfer status and progress of the directory transfer operation will be published to each transfer listener provided here. Default value is an empty array.
     ///   - objectTransferListenerFactory: A closure that creates and returns an array of `UploadObjectTransferListener` instances for each individual object transfer. The transfer status and progress of each individual object transfer operation will be published to the listeners created here. Default is a closure that returns an empty array.
+    ///   - maxConcurrency: The maximum number of concurrent `uploadObject` requests to spin up for the `uploadDirectory` request. Default value is `50`.
     public init(
         bucket: String,
         source: URL,
         followSymbolicLinks: Bool = false,
         recursive: Bool = false,
         s3Prefix: String? = nil,
-        s3Delimiter: String = "/",
-        putObjectRequestCallback: @Sendable @escaping (PutObjectInput) -> PutObjectInput = { input in
+        uploadObjectRequestModifier: @Sendable @escaping (UploadObjectInput) -> UploadObjectInput = { input in
             return input
         },
         failurePolicy: @escaping FailurePolicy<UploadDirectoryInput> = CannedFailurePolicy
@@ -62,18 +61,19 @@ public struct UploadDirectoryInput: Sendable, Identifiable {
         directoryTransferListeners: [UploadDirectoryTransferListener] = [],
         objectTransferListenerFactory: @Sendable @escaping () async -> [UploadObjectTransferListener] = {
             []
-        }
+        },
+        maxConcurrency: Int = 50
     ) throws {
         self.bucket = bucket
         self.source = source
         self.followSymbolicLinks = followSymbolicLinks
         self.recursive = recursive
         self.s3Prefix = s3Prefix
-        self.s3Delimiter = s3Delimiter
-        self.putObjectRequestCallback = putObjectRequestCallback
+        self.uploadObjectRequestModifier = uploadObjectRequestModifier
         self.failurePolicy = failurePolicy
         self.directoryTransferListeners = directoryTransferListeners
         self.objectTransferListenerFactory = objectTransferListenerFactory
+        self.maxConcurrency = maxConcurrency
         try validateSourceURL(source)
     }
 

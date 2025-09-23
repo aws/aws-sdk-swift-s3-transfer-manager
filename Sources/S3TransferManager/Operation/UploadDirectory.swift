@@ -26,24 +26,44 @@ public extension S3TransferManager {
             let snapshot = DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             input.directoryTransferListeners.forEach { $0.onTransferInitiated(input: input, snapshot: snapshot) }
 
-            // Concurrency-safe storage for results of `uploadObject` child tasks.
             let results = Results()
+            let fileDiscovery = discoverFilesProgressively(
+                in: input.source,
+                recursive: input.recursive,
+                followSymbolicLinks: input.followSymbolicLinks
+            )
 
             do {
-                let nestedFileURLs = try getNestedFileURLs(
-                    in: input.source,
-                    recursive: input.recursive,
-                    followSymbolicLinks: input.followSymbolicLinks
-                )
-                await withThrowingTaskGroup(of: Void.self) { group in
-                    var uploadObjectOperationNum = 1
-                    for url in nestedFileURLs {
-                        // Need to capture specific operation number value for each task.
-                        let operationNum = uploadObjectOperationNum
-                        group.addTask {
-                            return try await self.uploadObjectTask(input, operationNum, url, results)
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    let uploadTracker = UploadTracker()
+                    var operationNum = 1
+                    let maxConcurrentUploads = input.maxConcurrency
+
+                    for try await fileURL in fileDiscovery {
+                        // Wait if we've hit the concurrent uploadObject limit.
+                        while await uploadTracker.activeTransferCount >= maxConcurrentUploads {
+                            _ = try await group.next()
                         }
-                        uploadObjectOperationNum += 1
+
+                        let currentOpNum = operationNum
+                        await uploadTracker.increment()
+                        group.addTask {
+                            do {
+                                try await self.uploadObjectTask(input, currentOpNum, fileURL, results)
+                                await uploadTracker.decrement()
+                                return
+                            } catch {
+                                await uploadTracker.decrement()
+                                throw error
+                            }
+                        }
+                        operationNum += 1
+                    }
+
+                    // Wait for remaining uploads
+                    while await uploadTracker.activeTransferCount > 0 {
+                        _ = try await group.next()
+                        await uploadTracker.decrement()
                     }
                 }
                 return await processResultsAndGetOutput(input: input, results: results)
@@ -110,61 +130,60 @@ public extension S3TransferManager {
         )}
     }
 
-    internal func getNestedFileURLs(
+    internal func discoverFilesProgressively(
         in source: URL,
         recursive: Bool,
         followSymbolicLinks: Bool
-    ) throws -> [URL] {
-        var nestedFileURLs: [URL] = []
-        var visitedURLs = Set<String>()
+    ) -> AsyncThrowingStream<URL, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                var visitedURLs = Set<String>()
+                var directoryQueue: [URL] = [source]
 
-        // Mark source directory as visited.
-        visitedURLs.insert(source.resolvingSymlinksInPath().absoluteString)
+                visitedURLs.insert(source.resolvingSymlinksInPath().absoluteString)
 
-        // Start BFS with files directly nested below source directory.
-        var bfsQueue = try getDirectlyNestedURLs(
-            in: source,
-            isSymlink: source.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink ?? false
-        )
+                while !directoryQueue.isEmpty {
+                    let currentDir = directoryQueue.removeFirst()
 
-        // BFS for processing URLs contained in source directory.
-        while !bfsQueue.isEmpty {
-            let originalURL = bfsQueue.removeFirst()
-            let originalURLProperties = try originalURL.resourceValues(
-                forKeys: [.isSymbolicLinkKey]
-            )
-            let originalURLIsSymlink = originalURLProperties.isSymbolicLink ?? false
-            if originalURLIsSymlink && !followSymbolicLinks {
-                continue
-            }
+                    do {
+                        let currentDirProperties = try currentDir.resourceValues(forKeys: [.isSymbolicLinkKey])
+                        let isSymlink = currentDirProperties.isSymbolicLink ?? false
 
-            // URL without "./", "../", and symlinks.
-            let resolvedURL = originalURL.resolvingSymlinksInPath()
+                        let nestedURLs = try getDirectlyNestedURLs(in: currentDir, isSymlink: isSymlink)
 
-            // Skip if current URL has already been looked at.
-            if visitedURLs.contains(resolvedURL.absoluteString) {
-                logger.debug("Skipping a duplicate URL: \(originalURL).")
-                continue
-            }
+                        for originalURL in nestedURLs {
+                            let originalURLProperties = try originalURL.resourceValues(forKeys: [.isSymbolicLinkKey])
+                            let originalURLIsSymlink = originalURLProperties.isSymbolicLink ?? false
 
-            // Add resolved URL to visited set.
-            visitedURLs.insert(resolvedURL.absoluteString)
+                            if originalURLIsSymlink && !followSymbolicLinks {
+                                continue
+                            }
 
-            let resolvedURLProperties = try resolvedURL.resourceValues(
-                forKeys: [.isDirectoryKey, .isRegularFileKey]
-            )
-            // If it's a directory URL & TM is configured to be recursive:
-            if resolvedURLProperties.isDirectory ?? false && recursive {
-                // Add subdirectory's directly nested file URLs to the BFS queue.
-                let directlyNestedURLs = try getDirectlyNestedURLs(in: originalURL, isSymlink: originalURLIsSymlink)
-                bfsQueue.append(contentsOf: directlyNestedURLs)
-            } else if resolvedURLProperties.isRegularFile ?? false {
-                // If it's a regular file, save it to the return value array.
-                nestedFileURLs.append(originalURL)
+                            let resolvedURL = originalURL.resolvingSymlinksInPath()
+                            guard !visitedURLs.contains(resolvedURL.absoluteString) else {
+                                logger.debug("Skipping a duplicate URL: \(originalURL).")
+                                continue
+                            }
+                            visitedURLs.insert(resolvedURL.absoluteString)
+
+                            let properties = try resolvedURL.resourceValues(
+                                forKeys: [.isDirectoryKey, .isRegularFileKey]
+                            )
+
+                            if properties.isRegularFile ?? false {
+                                continuation.yield(originalURL)
+                            } else if (properties.isDirectory ?? false) && recursive {
+                                directoryQueue.append(originalURL)
+                            }
+                        }
+                    } catch {
+                        continuation.finish(throwing: error)
+                        return
+                    }
+                }
+                continuation.finish()
             }
         }
-
-        return nestedFileURLs
     }
 
     /*
@@ -216,17 +235,15 @@ public extension S3TransferManager {
 
         defer { try? fileHandle.close() }
 
-        let uploadObjectInput = UploadObjectInput(
+        let uploadObjectInput = input.uploadObjectRequestModifier(UploadObjectInput(
             id: input.id + "-\(operationNumber)",
-            // This is the callback that allows custom modifications of
-            //  the individual `PutObjectInput` structs for the SDK user.
             body: .stream(FileStream(fileHandle: fileHandle)),
             bucket: input.bucket,
             // CRC32 is SDK-default algorithm; this can be overwritten in callback by users.
             checksumAlgorithm: .crc32,
             key: resolvedObjectKey,
             transferListeners: await input.objectTransferListenerFactory()
-        )
+        ))
 
         do {
             // Create S3TM `uploadObject` task and await its completion before returning.
@@ -242,26 +259,35 @@ public extension S3TransferManager {
     }
 
     internal func getResolvedObjectKey(of url: URL, inDir dir: URL, input: UploadDirectoryInput) throws -> String {
-        // Step 1: if given a non-default s3Delimter, throw validation exception if the file name contains s3Delimiter.
-        if input.s3Delimiter != defaultPathSeparator() && url.lastPathComponent.contains(input.s3Delimiter) {
+        let delimiter = "/"
+        // Throw validation exception if the file name contains delimiter.
+        if url.lastPathComponent.contains(delimiter) {
             throw S3TMUploadDirectoryError.InvalidFileName(
-                "The file \"\(url.absoluteString)\" has S3 delimiter \"\(input.s3Delimiter)\" in its name."
+                "The file \"\(url.absoluteString)\" has \"\(delimiter)\" in its name."
             )
         }
-        // Step 2: append s3Delimiter to s3Prefix if it does not already end with it.
+        // Append delimiter to s3Prefix if it does not already end with it.
         var resolvedPrefix: String = ""
         if let providedPrefix = input.s3Prefix {
-            resolvedPrefix = providedPrefix + (providedPrefix.hasSuffix(input.s3Delimiter) ? "" : input.s3Delimiter)
+            resolvedPrefix = providedPrefix + (providedPrefix.hasSuffix(delimiter) ? "" : delimiter)
         }
-        // Step 3: retrieve the relative path of the file URL.
+        // Retrieve the relative path of the file URL.
         // Get absolute string of file URL & dir URL; remove dir URL prefix from file URL to get the relative path.
-        var relativePath = url.absoluteString.removePrefix(dir.absoluteString).removePrefix(defaultPathSeparator())
-        // Step 4: if user configured a custom s3Delimiter, replace all instances of system default path separator "/" in the relative path from step 3 with the custom s3Delimiter.
-        if input.s3Delimiter != defaultPathSeparator() {
-            relativePath = relativePath.replacingOccurrences(of: defaultPathSeparator(), with: input.s3Delimiter)
-        }
-        // Step 5: prefix the string from Step 4 with the resolved prefix.
+        let relativePath = url.absoluteString.removePrefix(dir.absoluteString).removePrefix(defaultPathSeparator())
+        // Prefix the resolved relative path with the resolved prefix.
         return resolvedPrefix + relativePath
+    }
+}
+
+private actor UploadTracker {
+    private(set) var activeTransferCount = 0
+
+    func increment() {
+        activeTransferCount += 1
+    }
+
+    func decrement() {
+        activeTransferCount -= 1
     }
 }
 

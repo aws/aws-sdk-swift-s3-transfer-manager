@@ -179,26 +179,6 @@ class UploadDirectoryIntegTests: XCTestCase {
         )
     }
 
-    func testUploadDirectory_RecursiveAndFollowSymlink_CustomDelimiter() async throws {
-        try await runUploadDirectoryTest(
-            input: UploadDirectoryInput(
-                bucket: bucketName,
-                source: sourceURL,
-                followSymbolicLinks: true,
-                recursive: true,
-                s3Delimiter: "-"
-            ),
-            expectedObjectKeys: [
-                "a.txt",
-                "nested-b.txt",
-                "symlinkToOutsideSourceDir-c.txt",
-                "nested-nested2-d.txt",
-                "symlinkToOutsideSourceDir-e.txt",
-                "symlinkToFileF"
-            ]
-        )
-    }
-
     func testUploadDirectory_RecursiveAndFollowSymlink_CustomPrefix() async throws {
         try await runUploadDirectoryTest(
             input: UploadDirectoryInput(
@@ -215,27 +195,6 @@ class UploadDirectoryIntegTests: XCTestCase {
                 "pre/nested/nested2/d.txt",
                 "pre/symlinkToOutsideSourceDir/e.txt",
                 "pre/symlinkToFileF"
-            ]
-        )
-    }
-
-    func testUploadDirectory_RecursiveAndFollowSymlink_CustomDelimiterAndPrefix() async throws {
-        try await runUploadDirectoryTest(
-            input: UploadDirectoryInput(
-                bucket: bucketName,
-                source: sourceURL,
-                followSymbolicLinks: true,
-                recursive: true,
-                s3Prefix: "pre",
-                s3Delimiter: "-"
-            ),
-            expectedObjectKeys: [
-                "pre-a.txt",
-                "pre-nested-b.txt",
-                "pre-symlinkToOutsideSourceDir-c.txt",
-                "pre-nested-nested2-d.txt",
-                "pre-symlinkToOutsideSourceDir-e.txt",
-                "pre-symlinkToFileF"
             ]
         )
     }

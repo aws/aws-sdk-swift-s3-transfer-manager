@@ -34,35 +34,53 @@ public extension S3TransferManager {
                 snapshot: DirectoryTransferProgressSnapshot(transferredFiles: 0, totalFiles: 0)
             )}
 
-            // Concurrency-safe storage for results of `downloadObject` child tasks.
             let results = Results()
+            let downloadTracker = DownloadTracker()
 
-            var objectKeyToCreatedFileURLMap: [String: URL] = [:]
+            try validateOrCreateDestinationDirectory(input: input)
+
+            let objectDiscovery = discoverObjectsProgressively(input: input)
+            var createdTempFiles: [URL] = []
+
             do {
-                objectKeyToCreatedFileURLMap = try await setupDestinations(input, config.s3Client)
-                await withThrowingTaskGroup(of: Void.self) { group in
-                    // Add `downloadObject` child tasks.
-                    var downloadObjectOperationNum = 1
-                    for pair in objectKeyToCreatedFileURLMap {
-                        // Save current operation num as constant let.
-                        // Using `downloadObjectOperationNum` directly in the group.addTask closure below results
-                        //  in same value being used for the tasks bc var is a reference type & tasks get created
-                        //  before they even start running. E.g., by the first task runs, `downloadObjectOperationNum`
-                        //  could already be updated to its highest value.
-                        let operationNum = downloadObjectOperationNum
-                        group.addTask {
-                            return try await self.downloadObjectTask(input, pair, operationNum, results)
+                try await withThrowingTaskGroup(of: Void.self) { group in
+                    var operationNum = 1
+                    let maxConcurrentDownloads = input.maxConcurrency
+
+                    for try await (objectKey, tempFileURL) in objectDiscovery {
+                        createdTempFiles.append(tempFileURL)
+
+                        // Wait if we've hit the concurrent downloadObject limit
+                        while await downloadTracker.activeTransferCount >= maxConcurrentDownloads {
+                            _ = try await group.next()
                         }
-                        downloadObjectOperationNum += 1
+
+                        let currentOpNum = operationNum
+                        await downloadTracker.increment()
+                        group.addTask {
+                            do {
+                                try await self.downloadObjectTask(
+                                    input, (objectKey, tempFileURL), currentOpNum, results
+                                )
+                                await downloadTracker.decrement()
+                                return
+                            } catch {
+                                await downloadTracker.decrement()
+                                throw error
+                            }
+                        }
+                        operationNum += 1
+                    }
+
+                    // Wait for remaining downloads
+                    while await downloadTracker.activeTransferCount > 0 {
+                        _ = try await group.next()
                     }
                 }
                 return await processResultsAndGetOutput(input, results)
             } catch {
                 await processResultsBeforeThrowing(error, input, results)
-                // Delete all temporary files.
-                cleanupTempFilesBeforeThrowingError(
-                    urls: objectKeyToCreatedFileURLMap.values.map { $0 }
-                )
+                cleanupTempFilesBeforeThrowingError(urls: createdTempFiles)
                 throw error
             }
         }
@@ -124,25 +142,62 @@ public extension S3TransferManager {
         )}
     }
 
-    private func setupDestinations(
-        _ input: DownloadBucketInput,
-        _ s3: S3Client
-    ) async throws -> [String: URL] {
-        try validateOrCreateDestinationDirectory(input: input)
+    internal func discoverObjectsProgressively(
+        input: DownloadBucketInput
+    ) -> AsyncThrowingStream<(String, URL), Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    try await withBucketPermission(bucketName: input.bucket) {
+                        let paginatorOutputs = config.s3Client.listObjectsV2Paginated(input: ListObjectsV2Input(
+                            bucket: input.bucket,
+                            prefix: input.s3Prefix
+                        ))
 
-        let objects = try await fetchS3ObjectsUsingListObjectsV2Paginated(input, s3)
-        let objectKeyToResolvedFileURLMap: [String: URL] = getFileURLsResolvedFromObjectKeys(
-            objects: objects,
-            destination: input.destination,
-            s3Prefix: input.s3Prefix,
-            s3Delimiter: input.s3Delimiter,
-            filter: input.filter
-        )
-        // Subset of `objectKeyToResolvedFileURLMap` above.
-        // If resolved fileURL escapes the destination directory, it gets skipped.
-        return try createDestinationFiles(
-            keyToResolvedURLMapping: objectKeyToResolvedFileURLMap
-        )
+                        for try await output in paginatorOutputs {
+                            guard let contents = output.contents else {
+                                throw S3TMDownloadBucketError.FailedToRetrieveObjectsUsingListObjectsV2
+                            }
+
+                            for object in contents {
+                                if let (objectKey, tempFileURL) = try processObject(object, input: input) {
+                                    continuation.yield((objectKey, tempFileURL))
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                    return
+                }
+                continuation.finish()
+            }
+        }
+    }
+
+    private func processObject(
+        _ object: S3ClientTypes.Object,
+        input: DownloadBucketInput
+    ) throws -> (String, URL)? {
+        let originalKey = object.key!
+        let delimiter = "/"
+
+        // Use user-provided filter to skip objects
+        if !input.filter(object) || originalKey.hasSuffix(delimiter) {
+            return nil
+        }
+
+        let relativeFilePath = originalKey.removePrefix(input.s3Prefix ?? "")
+
+        // If relativeFilePath escapes destination directory, skip it
+        if filePathEscapesDestination(filePath: relativeFilePath) {
+            return nil
+        }
+
+        let resolvedFileURL = URL(string: input.destination.absoluteString.appendingPathComponent(relativeFilePath))!
+        let tempFileURL = try createDestinationFile(originalURL: resolvedFileURL)
+
+        return (originalKey, tempFileURL)
     }
 
     internal func validateOrCreateDestinationDirectory(
@@ -163,87 +218,17 @@ public extension S3TransferManager {
         }
     }
 
-    private func fetchS3ObjectsUsingListObjectsV2Paginated(
-        _ input: DownloadBucketInput,
-        _ s3: S3Client
-    ) async throws -> [S3ClientTypes.Object] {
-        let bucketName = input.bucket
-
-        return try await withBucketPermission(bucketName: bucketName) {
-            var objects: [S3ClientTypes.Object] = []
-            let paginatorOutputs = s3.listObjectsV2Paginated(input: ListObjectsV2Input(
-                bucket: input.bucket,
-                prefix: input.s3Prefix
-            ))
-            for try await output in paginatorOutputs {
-                guard let contents = output.contents else {
-                    throw S3TMDownloadBucketError.FailedToRetrieveObjectsUsingListObjectsV2
-                }
-                objects += contents
-            }
-            return objects
+    internal func createDestinationFile(originalURL: URL) throws -> URL {
+        // Generate temp URL with `.s3tmp.<8-char-uniqueID` suffix in file name before type extension.
+        var tempURLWithUniqueID = constructTempFileURL(originalURL: originalURL)
+        var tempDestinationPath = tempURLWithUniqueID.standardizedFileURL.path
+        // Check & regenerate unique ID if a file already exists at destinationURL.
+        while FileManager.default.fileExists(atPath: tempDestinationPath) {
+            tempURLWithUniqueID = constructTempFileURL(originalURL: originalURL)
+            tempDestinationPath = tempURLWithUniqueID.standardizedFileURL.path
         }
-    }
-
-    internal func getFileURLsResolvedFromObjectKeys(
-        objects: [S3ClientTypes.Object],
-        destination: URL,
-        s3Prefix: String? = nil,
-        s3Delimiter: String,
-        filter: (S3ClientTypes.Object) -> Bool
-    ) -> [String: URL] {
-        return Dictionary(uniqueKeysWithValues: objects.compactMap { object -> (String, URL)? in
-            let originalKey = object.key!
-
-            // Use user-provided filter to skip objects.
-            // If key ends with delimiter, it's a 0-byte file used by S3 to simulate directory structure; skip that too.
-            if !filter(object) || originalKey.hasSuffix(s3Delimiter) {
-               return nil
-            }
-
-            let keyWithoutPrefix = originalKey.removePrefix(s3Prefix ?? "")
-
-            // Replace instances of s3Delimiter in keyWithoutPrefix with Mac/Linux system default
-            //      path separtor "/" if s3Delimiter isn't "/".
-            // This effectively "translates" object key value to a file path.
-            let relativeFilePath = s3Delimiter == defaultPathSeparator()
-            ? keyWithoutPrefix
-            : keyWithoutPrefix.replacingOccurrences(
-                of: s3Delimiter,
-                with: defaultPathSeparator()
-            )
-
-            // If relativeFilePath escapes destination directory, skip it.
-            if filePathEscapesDestination(filePath: relativeFilePath) {
-                return nil
-            }
-
-            // Return the mapping of original key to resolved file URL.
-            return (originalKey, URL(string: destination.absoluteString.appendingPathComponent(relativeFilePath))!)
-        })
-    }
-
-    internal func createDestinationFiles(
-        keyToResolvedURLMapping: [String: URL]
-    ) throws -> [String: URL] {
-        var objectKeyToCreatedURLMapping: [String: URL] = [:]
-        for pair in keyToResolvedURLMapping {
-            let s3ObjectKey = pair.key
-            let urlResolvedFromS3ObjKey = pair.value
-
-            // Generate temp URL with `.s3tmp.<8-char-uniqueID` suffix in file name before type extension.
-            var tempURLWithUniqueID = constructTempFileURL(originalURL: urlResolvedFromS3ObjKey)
-            var tempDestinationPath = tempURLWithUniqueID.standardizedFileURL.path
-            // Check & regenerate unique ID if a file already exists at destinationURL.
-            while FileManager.default.fileExists(atPath: tempDestinationPath) {
-                tempURLWithUniqueID = constructTempFileURL(originalURL: urlResolvedFromS3ObjKey)
-                tempDestinationPath = tempURLWithUniqueID.standardizedFileURL.path
-            }
-            try createFile(at: URL(fileURLWithPath: tempDestinationPath))
-            // Save the created file URL mapping.
-            objectKeyToCreatedURLMapping[s3ObjectKey] = tempURLWithUniqueID
-        }
-        return objectKeyToCreatedURLMapping
+        try createFile(at: URL(fileURLWithPath: tempDestinationPath))
+        return tempURLWithUniqueID
     }
 
     internal func constructTempFileURL(originalURL: URL) -> URL {
@@ -310,14 +295,14 @@ public extension S3TransferManager {
             throw S3TMDownloadBucketError.FailedToCreateOutputStreamForFileURL(url: pair.value)
         }
         let operationID = input.id + "-\(operationNumber)"
-        let downloadObjectInput = DownloadObjectInput(
+        let downloadObjectInput = input.downloadObjectRequestModifier(DownloadObjectInput(
             id: operationID,
             outputStream: outputStream,
             bucket: input.bucket,
             checksumMode: config.responseChecksumValidation == .whenSupported ? .enabled : .sdkUnknown("DISABLED"),
             key: pair.key,
             transferListeners: await input.objectTransferListenerFactory()
-        )
+        ))
         do {
             // Create S3TM `downloadObject` task and await its completion before returning.
             let downloadObjectTask = try downloadObject(input: downloadObjectInput)
@@ -378,6 +363,18 @@ public extension S3TransferManager {
                 logger.error("Failed to delete temporary file at \(url): \(error)")
             }
         }
+    }
+}
+
+private actor DownloadTracker {
+    private(set) var activeTransferCount = 0
+
+    func increment() {
+        activeTransferCount += 1
+    }
+
+    func decrement() {
+        activeTransferCount -= 1
     }
 }
 
