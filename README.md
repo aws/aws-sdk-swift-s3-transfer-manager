@@ -70,7 +70,7 @@ Or you could pass the config object to the initializer to customize S3TM by doin
 ```swift
 // Create the custom S3 client config that you want S3TM to use.
 let customS3ClientConfig = try S3Client.S3ClientConfiguration(
-    region: "some-region",
+    region: "us-west-2",
     . . . custom S3 client configurations . . .
 )
 
@@ -92,27 +92,24 @@ For more information on what each configuration does, please refer to [the docum
 
 ### Upload an object
 
-To upload a file to Amazon S3, you need to provide the input struct UploadObjectInput, which contains a subset of PutObjectInput struct properties and an array of TransferListener. You must provide the destination bucket, the S3 object key to use, and the object body. 
+To upload a file to Amazon S3, you need to provide the input struct `UploadObjectInput`, which contains a subset of `PutObjectInput` struct properties and an array of transfer listeners. You must provide the destination bucket, the S3 object key to use, and the object body. 
 
 When object being uploaded is bigger than the threshold configured by `multipartUploadThresholdBytes` (16MB default), S3TM breaks them down into parts, each with the part size configured by `targetPartSizeBytes` (8MB default), and uploads them concurrently using S3’s [multipart upload feature](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html#mpu-process).
 
 ```swift
-let s3tm = try await S3TransferManager()
-
 // Construct UploadObjectInput.
 let uploadObjectInput = UploadObjectInput(
     body: ByteStream.stream(
         FileStream(fileHandle: try FileHandle(forReadingFrom: URL(string: "file-to-upload.txt")!))
     ),
     bucket: "destination-bucket",
-    key: "some-key",
-    transferListeners: [UploadObjectLoggingTransferListener()]
+    key: "some-key"
 )
 
 // Call .uploadObject and save the returned task.
 let uploadObjectTask = try s3tm.uploadObject(input: uploadObjectInput)
 
-// Optional: await on the returned task and retrieve the operation output or an error.
+// Optional for every transfer operation: await on the returned task and retrieve the operation output or an error.
 // Even if you don't do this, the task executes in the background.
 do {
     let uploadObjectOutput = try await uploadObjectTask.value
@@ -123,13 +120,11 @@ do {
 
 ### Download an object
 
-To download an object from Amazon S3, you need to provide the input struct DownloadObjectInput, which contains the download destination, a subset of GetObjectInput struct properties, and an array of TransferListener. The download destination is an instance of [Swift’s Foundation.OutputStream](https://developer.apple.com/documentation/foundation/outputstream). You must provide the download destination, the source bucket, and the S3 object key of the object to download. 
+To download an object from Amazon S3, you need to provide the input struct `DownloadObjectInput`, which contains the download destination, a subset of `GetObjectInput` struct properties, and an array of transfer listeners. The download destination is an instance of [Swift’s Foundation.OutputStream](https://developer.apple.com/documentation/foundation/outputstream). You must provide the download destination, the source bucket, and the S3 object key of the object to download. 
 
 When object being downloaded is bigger than the size of a single part configured by `targetPartSizeBytes`  (8MB default), S3TM downloads the object in parts concurrently using either part numbers or byte ranges as configured by `multipartDownloadType` (`.part` default).
 
 ```swift
-let s3tm = try await S3TransferManager()
-
 // Construct DownloadObjectInput.
 let downloadObjectInput = DownloadObjectInput(
     outputStream: OutputStream(toFileAtPath: "destination-file.txt", append: true)!,
@@ -139,25 +134,16 @@ let downloadObjectInput = DownloadObjectInput(
 
 // Call .downloadObject and save the returned task.
 let downloadObjectTask = try s3tm.downloadObject(input: downloadObjectInput)
-
-// Optional: await on the returned task and retrieve the operation output or an error.
-// Even if you don't do this, the task executes in the background.
-do {
-    let downloadObjectOutput = try await downloadObjectTask.value
-} catch {
-    // Handle error.
-}
+let downloadObjectOutput = try await downloadObjectTask.value
 ```
 
 ### Upload a directory
 
-To upload a local directory to a S3 bucket, you need to provide the input struct UploadDirectoryInput and provide the destination bucket, and the source directory’s URL. 
+To upload a local directory to a S3 bucket, you need to provide the input struct `UploadDirectoryInput` and provide the destination bucket, and the source directory’s URL. 
 
-The UploadDirectoryInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the UploadDirectoryInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/UploadDirectoryInput.swift).
+The `UploadDirectoryInput` struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the UploadDirectoryInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/UploadDirectoryInput.swift).
 
 ```swift
-let s3tm = try await S3TransferManager()
-
 // Construct UploadDirectoryInput.
 let uploadDirectoryInput = try UploadDirectoryInput(
     bucket: "destination-bucket",
@@ -166,25 +152,16 @@ let uploadDirectoryInput = try UploadDirectoryInput(
 
 // Call .uploadDirectory and save the returned task.
 let uploadDirectoryTask = try s3tm.uploadDirectory(input: uploadDirectoryInput)
-
-// Optional: await on the returned task and retrieve the operation output or an error.
-// Even if you don't do this, the task executes in the background.
-do {
-    let uploadDirectoryOutput = try await uploadDirectoryTask.value
-} catch {
-    // Handle error.
-}
+let uploadDirectoryOutput = try await uploadDirectoryTask.value
 ```
 
 ### Download a bucket
 
-To download a S3 bucket to a local directory, you need to provide the input struct DownloadBucketInput and provide the source bucket, and the destination directory URL.
+To download a S3 bucket to a local directory, you need to provide the input struct `DownloadBucketInput` and provide the source bucket, and the destination directory URL.
 
-The DownloadBucketInput struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the DownloadBucketInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/DownloadBucketInput.swift).
+The `DownloadBucketInput` struct has several optional properties that configure the transfer behavior. For more details on what each input configuration does, refer to [the documentation comments on the DownloadBucketInput](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/Model/OperationInput/DownloadBucketInput.swift).
 
 ```swift
-let s3tm = try await S3TransferManager()
-
 // Construct DownloadBucketInput.
 let downloadBucketInput = DownloadBucketInput(
     bucket: "source-bucket",
@@ -193,21 +170,14 @@ let downloadBucketInput = DownloadBucketInput(
 
 // Call .downloadBucket and save the returned task.
 let downloadBucketTask = try s3tm.downloadBucket(input: downloadBucketInput)
-
-// Optional: await on the returned task and retrieve the operation output or an error.
-// Even if you don't do this, the task executes in the background.
-do {
-    let downloadBucketOutput = try await downloadBucketTask.value
-} catch {
-    // Handle error.
-}
+let downloadBucketOutput = try await downloadBucketTask.value
 ```
 
 ### Monitor transfer progress
 
-You can optionally configure transfer listeners for any of the S3TM operations above. The Amazon S3 Transfer Manager for Swift provides 2 canned transfer progress listeners for you. They’re LoggingTransferListeners and StreamingTransferListeners. There's a specific listener type for each operation, e.g., `UploadObjectLoggingTransferListener` is a LoggingTransferListener for the single object upload operation.
+You can optionally configure transfer listeners for any of the S3TM operations above. The Amazon S3 Transfer Manager for Swift provides 2 canned transfer progress listeners for you. They’re `LoggingTransferListener`s and `StreamingTransferListener`s. There's a specific listener type for each operation, e.g., `UploadObjectLoggingTransferListener` is a `LoggingTransferListener` for the single object upload operation.
 
-The LoggingTransferListeners log transfer events to the console using [swift-log](https://github.com/apple/swift-log). The StreamingTransferListeners publish transfer events to its AsyncThrowingStream instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., UploadObjectInput's `transferListeners` field). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the TransferListener protocol and configuring it in the input structs.
+The `LoggingTransferListener`s log transfer events to the console using [swift-log](https://github.com/apple/swift-log). The `StreamingTransferListener`s publish transfer events to its `AsyncThrowingStream` instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., `UploadObjectInput`'s `transferListeners` field). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the `TransferListener` protocol and configuring it in the input structs.
 
 See below for the example usage of the two canned transfer listeners.
 
@@ -233,7 +203,7 @@ let uploadObjectTask = try s3tm.uploadObject(input: uploadObjectInput)
 
 #### StreamingTransferListener
 
-For StreamingTransferListener, you must close the underlying AsyncThrowingStream after transfer completion by explicitly calling closeStream() on the StreamingTransferListener instance to prevent memory leaks and hanging stream consumers.
+For `StreamingTransferListener`, you must close the underlying `AsyncThrowingStream` after transfer completion by explicitly calling `closeStream()` on the `StreamingTransferListener` instance to prevent memory leaks and hanging stream consumers.
 
 ```swift
 let s3tm = try await S3TransferManager()
