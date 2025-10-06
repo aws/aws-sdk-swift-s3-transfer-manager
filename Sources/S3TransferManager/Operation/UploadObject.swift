@@ -261,45 +261,58 @@ public extension S3TransferManager {
         uploadID: String
     ) async throws -> S3ClientTypes.CompletedPart {
         try Task.checkCancellation()
-        let partData = try await {
-            let partOffset = (partNumber - 1) * partSize
-            // Either take full part size or remainder (only for the last part).
-            let resolvedPartSize = min(partSize, payloadSize - partOffset)
-            let partData = try await self.readPartData(
-                input: input,
-                partSize: resolvedPartSize,
-                partOffset: partOffset,
-                byteStreamPartReader: byteStreamPartReader
+        let partOffset = (partNumber - 1) * partSize
+        // Either take full part size or remainder (only for the last part).
+        let resolvedPartSize = min(partSize, payloadSize - partOffset)
+        // Secure memory for part.
+        await memoryManager.waitForMemory(resolvedPartSize)
+        do {
+            let partData = try await {
+                let partData = try await self.readPartData(
+                    input: input,
+                    partSize: resolvedPartSize,
+                    partOffset: partOffset,
+                    byteStreamPartReader: byteStreamPartReader
+                )
+                guard partData.count == resolvedPartSize else {
+                    throw S3TMUploadObjectError.incorrectSizePartRead(
+                        expected: resolvedPartSize,
+                        actual: partData.count
+                    )
+                }
+                return partData
+            }()
+
+            let uploadPartInput = input.deriveUploadPartInput(
+                body: ByteStream.data(partData),
+                partNumber: partNumber,
+                uploadID: uploadID
             )
-            guard partData.count == resolvedPartSize else {
-                throw S3TMUploadObjectError.incorrectSizePartRead(expected: resolvedPartSize, actual: partData.count)
-            }
-            return partData
-        }()
+            let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
 
-        let uploadPartInput = input.deriveUploadPartInput(
-            body: ByteStream.data(partData),
-            partNumber: partNumber,
-            uploadID: uploadID
-        )
-        let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
-
-        let snapshot = SingleObjectTransferProgressSnapshot(
-            transferredBytes: await progressTracker.addBytes(partData.count),
-            totalBytes: payloadSize
-        )
-        input.transferListeners.forEach { $0.onBytesTransferred(
-            input: input,
-            snapshot: snapshot
-        )}
-        return S3ClientTypes.CompletedPart(
-            checksumCRC32: uploadPartOutput.checksumCRC32,
-            checksumCRC32C: uploadPartOutput.checksumCRC32C,
-            checksumSHA1: uploadPartOutput.checksumSHA1,
-            checksumSHA256: uploadPartOutput.checksumSHA256,
-            eTag: uploadPartOutput.eTag,
-            partNumber: partNumber
-        )
+            let snapshot = SingleObjectTransferProgressSnapshot(
+                transferredBytes: await progressTracker.addBytes(partData.count),
+                totalBytes: payloadSize
+            )
+            input.transferListeners.forEach { $0.onBytesTransferred(
+                input: input,
+                snapshot: snapshot
+            )}
+            // Release memory for part.
+            await memoryManager.releaseMemory(resolvedPartSize)
+            return S3ClientTypes.CompletedPart(
+                checksumCRC32: uploadPartOutput.checksumCRC32,
+                checksumCRC32C: uploadPartOutput.checksumCRC32C,
+                checksumSHA1: uploadPartOutput.checksumSHA1,
+                checksumSHA256: uploadPartOutput.checksumSHA256,
+                eTag: uploadPartOutput.eTag,
+                partNumber: partNumber
+            )
+        } catch {
+            // In case of error, release memory for failed part.
+            await memoryManager.releaseMemory(resolvedPartSize)
+            throw error
+        }
     }
 
     internal func readPartData(

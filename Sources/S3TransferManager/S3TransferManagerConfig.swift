@@ -27,6 +27,8 @@ public class S3TransferManagerConfig {
     let responseChecksumValidation: AWSChecksumCalculationMode
     /// The multipart download type to use for the `downloadObject` and `downloadBucket` operations.
     let multipartDownloadType: MultipartDownloadType
+    /// The global memory usage limit for the S3TransferManager instance.
+    let maxInMemoryBytes: Int
 
     /// Initializes `S3TransferManagerConfig` with provided parameters.
     ///
@@ -37,13 +39,15 @@ public class S3TransferManagerConfig {
     ///    - requestChecksumCalculation: Specifies when checksum should be calculated for requests (e.g., upload operations). This value overrides the value provided in `s3ClientConfig`. Default value is `.whenSupported`, which means transfer manager will automatically calculate checksum in absence of full object checksum in operation input.
     ///    - responseChecksumValidation: Specifies when checksm should be validated for responses (e.g., download operations). This value overrides the value provided in `s3ClientConfig`. Default value is `.whenSupported`, which means transfer manager will automatically calculate checksum and validate it against checksum returned in the response.
     ///    - multipartDownloadType: Specifies the behavior of multipart download operations. Default value is `.part`, which configures individual `getObject` calls to use part numbers for multipart downloads. The other option is `.range`, which uses the byte range of the S3 object for multipart downloads. If what you want to download was uploaded without using multipart upload (therefore there's no part number available), then you should use `.range`.
+    ///    - maxInMemoryBytes: Specifies the global memory usage limit for the S3TransferManager instance. Default vaule is 6GB for macOS and Linux, 1GB for iOS and tvOS, and 100MB for watchOS.
     public init(
         s3ClientConfig: S3Client.S3ClientConfiguration? = nil,
         targetPartSizeBytes: Int = 8 * 1024 * 1024,
         multipartUploadThresholdBytes: Int = 16 * 1024 * 1024,
         requestChecksumCalculation: AWSChecksumCalculationMode = .whenSupported,
         responseChecksumValidation: AWSChecksumCalculationMode = .whenSupported,
-        multipartDownloadType: MultipartDownloadType = .part
+        multipartDownloadType: MultipartDownloadType = .part,
+        maxInMemoryBytes: Int? = nil
     ) async throws {
         // If no client config was provided, initialize a default client config.
         if let s3ClientConfig {
@@ -67,6 +71,17 @@ public class S3TransferManagerConfig {
         self.requestChecksumCalculation = requestChecksumCalculation
         self.responseChecksumValidation = responseChecksumValidation
         self.multipartDownloadType = multipartDownloadType
+        self.maxInMemoryBytes = maxInMemoryBytes ?? {
+        #if os(macOS) || os(Linux)
+            return 6 * 1024 * 1024 * 1024  // 6GB
+        #elseif os(iOS) || os(tvOS)
+            return 1 * 1024 * 1024 * 1024  // 1GB
+        #elseif os(watchOS)
+            return 100 * 1024 * 1024       // 100MB
+        #else
+            return 1 * 1024 * 1024 * 1024  // 1GB default
+        #endif
+        }()
     }
 }
 

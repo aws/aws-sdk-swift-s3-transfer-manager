@@ -94,6 +94,10 @@ public extension S3TransferManager {
             withPartNumber: 1
         )
         let triageGETOutput = try await triageGetObject(input, triageGETInput, progressTracker, s3)
+        // Assume every part is the same size (up to last part).
+        guard let partSize = triageGETOutput.contentLength else {
+            throw S3TMDownloadObjectError.failedToDeterminePartSizeForPartDownload
+        }
         let objectSize = try determineObjectSize(triageGETOutput)
 
         // Return if there's no more parts.
@@ -104,7 +108,7 @@ public extension S3TransferManager {
         // Otherwise, fetch all remaining parts and write to the output stream. Then return.
         // Use eTag value from triage response as ifMatch value in all subsequent requests for durability.
         let eTag = triageGETOutput.eTag
-        try await getRemainingObjectWithPartNumbers(input, progressTracker, s3, totalParts, eTag, objectSize)
+        try await getRemainingObjectWithPartNumbers(input, progressTracker, s3, totalParts, eTag, objectSize, partSize)
         return try await publishTransferCompleteAndReturnOutput(triageGETOutput, input, progressTracker, objectSize)
     }
 
@@ -114,7 +118,8 @@ public extension S3TransferManager {
         _ s3: S3Client,
         _ totalParts: Int,
         _ eTagFromTriageGetObjectResponse: String?,
-        _ objectSize: Int
+        _ objectSize: Int,
+        _ partSize: Int
     ) async throws {
         let batchSize = concurrentTaskLimitPerBucket
 
@@ -122,10 +127,10 @@ public extension S3TransferManager {
         for batchStart in stride(from: 2, to: totalParts + 1, by: batchSize) {
             let batchEnd = min(batchStart + batchSize - 1, totalParts)
 
-            try await withThrowingTaskGroup(of: (Int, ByteStream).self) { group in
+            try await withThrowingTaskGroup(of: (Int, Data).self) { group in
                 // Add child task for each part GET in current batch.
                 for partNumber in batchStart...batchEnd {
-                    group.addTask { // Each child task returns (part_number, bytestream) tuple.
+                    group.addTask { // Each child task returns (part_number, data) tuple.
                         return try await self.withBucketPermission(bucketName: input.bucket) {
                             try Task.checkCancellation()
                             let partGetObjectInput = input.deriveGetObjectInput(
@@ -133,9 +138,20 @@ public extension S3TransferManager {
                                 eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
                                 withPartNumber: partNumber
                             )
-                            let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
-                            await progressTracker.incrementPartialDownloadCount()
-                            return (partNumber, partGetObjectOutput.body!)
+                            let expectedMemoryUsage = partNumber == totalParts ? objectSize % partSize : partSize
+                            // Secure memory for full part size or (possibly smaller) last part size._
+                            await self.memoryManager.waitForMemory(expectedMemoryUsage)
+                            do {
+                                let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
+                                await progressTracker.incrementPartialDownloadCount()
+                                guard let data = try await partGetObjectOutput.body?.readData() else {
+                                    throw S3TMDownloadObjectError.failedToReadResponseBody
+                                }
+                                return (partNumber, data)
+                            } catch {
+                                await self.memoryManager.releaseMemory(expectedMemoryUsage)
+                                throw error
+                            }
                         }
                     }
                 }
@@ -233,18 +249,27 @@ public extension S3TransferManager {
         for batchStart in stride(from: 0, to: numberOfRequests, by: batchSize) {
             let batchEnd = min(batchStart + batchSize - 1, numberOfRequests - 1)
 
-            try await withThrowingTaskGroup(of: (Int, ByteStream).self) { group in
+            try await withThrowingTaskGroup(of: (Int, Data).self) { group in
                 // Add child task for each range GET in current batch.
                 for requestNum in batchStart...batchEnd {
-                    let rangeGetObjectInput = constructRangetGetObjectInput(
+                    let (rangeGetObjectInput, rangeSize) = constructRangetGetObjectInput(
                         input, requestNum, objectSize, eTagFromTriageGetObjectResponse
                     )
-                    group.addTask { // Each child task returns (request_number, stream) tuple.
+                    group.addTask { // Each child task returns (request_number, data) tuple.
                         return try await self.withBucketPermission(bucketName: input.bucket) {
                             try Task.checkCancellation()
-                            let rangeGetObjectOutput = try await s3.getObject(input: rangeGetObjectInput)
-                            await progressTracker.incrementPartialDownloadCount()
-                            return (requestNum, rangeGetObjectOutput.body!)
+                            await self.memoryManager.waitForMemory(rangeSize)
+                            do {
+                                let rangeGetObjectOutput = try await s3.getObject(input: rangeGetObjectInput)
+                                await progressTracker.incrementPartialDownloadCount()
+                                guard let data = try await rangeGetObjectOutput.body?.readData() else {
+                                    throw S3TMDownloadObjectError.failedToReadResponseBody
+                                }
+                                return (requestNum, data)
+                            } catch {
+                                await self.memoryManager.releaseMemory(rangeSize)
+                                throw error
+                            }
                         }
                     }
                 }
@@ -268,48 +293,55 @@ public extension S3TransferManager {
         _ requestNum: Int,
         _ objectSize: Int,
         _ eTagFromTriageGetObjectResponse: String?
-    ) -> GetObjectInput {
+    ) -> (GetObjectInput, Int) {
         // Subrange start is always offset by +1 due to triage getObject request.
         let subRangeStart = (requestNum + 1) * config.targetPartSizeBytes
         // End byte is inclusive, so must subtract 1 to get target byte amount.
         let subRangeEnd = min(subRangeStart + config.targetPartSizeBytes - 1, objectSize - 1)
-        return input.deriveGetObjectInput(
+        let derivedRangeGetObjectInput = input.deriveGetObjectInput(
             responseChecksumValidation: self.config.responseChecksumValidation,
             eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
             withRange: "bytes=\(subRangeStart)-\(subRangeEnd)"
         )
+        let rangeSize = subRangeEnd - subRangeStart + 1
+        return (derivedRangeGetObjectInput, rangeSize)
     }
 
     private func writeBatch(
-        _ group: ThrowingTaskGroup<(Int, ByteStream), any Error>,
+        _ group: ThrowingTaskGroup<(Int, Data), any Error>,
         _ batchStart: Int,
         _ input: DownloadObjectInput,
         _ progressTracker: ObjectTransferProgressTracker
     ) async throws {
         // Temporary buffer used to ensure correct ordering of data when writing to the output stream.
-        var buffer = [Int: ByteStream]()
+        var buffer = [Int: Data]()
 
-        var nextBodyToProcess = batchStart
-        for try await (index, body) in group {
-            buffer[index] = body
-            while let body = buffer[nextBodyToProcess] {
-                try await writeByteStream(body, input, progressTracker)
-                // Discard stream after it's written to output stream.
-                buffer.removeValue(forKey: nextBodyToProcess)
-                nextBodyToProcess += 1
+        var nextDataToProcess = batchStart
+        do {
+            for try await (index, data) in group {
+                buffer[index] = data
+                while let nextData = buffer[nextDataToProcess] {
+                    try await writeData(nextData, input, progressTracker)
+                    // Discard data after it's written to the output stream.
+                    buffer.removeValue(forKey: nextDataToProcess)
+                    await memoryManager.releaseMemory(nextData.count)
+                    nextDataToProcess += 1
+                }
             }
+        } catch {
+            // This catch can be reached in three ways:
+            // 1. If a task failed.
+            // 2. If a writeData call failed with an error.
+            // 3. If root task returned by downloadObject() is cancelled by user.
+            //
+            // When error is thrown from here, the throwing task group upstream sees it and sends task cancellation signal to all tasks.
+            // Each task definition has a catch block that releases assumed memory if it fails before returning fully-read data.
+            // So only the memory usage for finished tasks whose data is saved in buffer need to be cleared.
+            for (_, remainingData) in buffer {
+                await memoryManager.releaseMemory(remainingData.count)
+            }
+            throw error
         }
-    }
-
-    internal func writeByteStream(
-        _ byteStream: ByteStream,
-        _ input: DownloadObjectInput,
-        _ progressTracker: ObjectTransferProgressTracker
-    ) async throws {
-        guard let data = try await byteStream.readData() else {
-            throw S3TMDownloadObjectError.failedToReadResponseBody
-        }
-        try await writeData(data, input, progressTracker)
     }
 
     internal func writeData(
@@ -344,4 +376,5 @@ public enum S3TMDownloadObjectError: Error {
     case invalidRangeFormat(String)
     case unexpectedNumberOfRangedGetObjectCalls(expected: Int, actual: Int)
     case unexpectedNumberOfPartNumberGetObjectCalls(expected: Int, actual: Int)
+    case failedToDeterminePartSizeForPartDownload
 }

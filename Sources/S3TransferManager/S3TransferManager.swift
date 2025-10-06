@@ -26,12 +26,14 @@ public class S3TransferManager {
     internal let logger: SwiftLogger
     internal let concurrencyManager: S3TMConcurrencyManager
     internal let concurrentTaskLimitPerBucket: Int
+    internal let memoryManager: S3TMMemoryManager
 
     /// Initializes `S3TransferManager` with the default configuration.
     public init() async throws {
         self.config = try await S3TransferManagerConfig()
         self.concurrentTaskLimitPerBucket = config.s3ClientConfig.httpClientConfiguration.maxConnections
         self.concurrencyManager = S3TMConcurrencyManager(concurrentTaskLimitPerBucket: concurrentTaskLimitPerBucket)
+        self.memoryManager = S3TMMemoryManager(maxInMemoryBytes: config.maxInMemoryBytes)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 
@@ -45,6 +47,7 @@ public class S3TransferManager {
         self.config = config
         self.concurrentTaskLimitPerBucket = config.s3ClientConfig.httpClientConfiguration.maxConnections
         self.concurrencyManager = S3TMConcurrencyManager(concurrentTaskLimitPerBucket: concurrentTaskLimitPerBucket)
+        self.memoryManager = S3TMMemoryManager(maxInMemoryBytes: config.maxInMemoryBytes)
         logger = SwiftLogger(label: "S3TransferManager")
     }
 }
