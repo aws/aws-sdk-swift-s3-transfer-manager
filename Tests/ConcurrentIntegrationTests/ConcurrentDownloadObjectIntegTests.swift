@@ -37,10 +37,7 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
     let numFiles = 100
 
     override func setUp() async throws {
-        let tmConfig = try await S3TransferManagerConfig(
-            s3ClientConfig: S3Client.S3ClientConfiguration(region: region),
-            maxInMemoryBytes: 100 * 1024 * 1024
-        )
+        let tmConfig = try await S3TransferManagerConfig(s3ClientConfig: S3Client.S3ClientConfiguration(region: region))
         tm = S3TransferManager(config: tmConfig)
 
         let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()

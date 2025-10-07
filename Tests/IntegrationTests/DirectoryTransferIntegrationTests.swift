@@ -26,8 +26,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
         let s3ClientConfig = try await S3Client.S3ClientConfiguration(region: region)
         let tmConfig = try await S3TransferManagerConfig(
             s3ClientConfig: s3ClientConfig,
-            multipartUploadThresholdBytes: 10 * 1024 * 1024,  // 10MB
-            maxInMemoryBytes: 500 * 1024 * 1024
+            multipartUploadThresholdBytes: 10 * 1024 * 1024  // 10MB
         )
         tm = S3TransferManager(config: tmConfig)
 
