@@ -121,43 +121,46 @@ public extension S3TransferManager {
         _ objectSize: Int,
         _ partSize: Int
     ) async throws {
-        let batchSize = concurrentTaskLimitPerBucket
+        let memoryConstrainedBatchSize = config.maxInMemoryBytes / partSize
+        let batchSize = min(memoryConstrainedBatchSize, concurrentTaskLimitPerBucket)
+        let batchMemoryUsage = batchSize * partSize
 
         // Process all parts in batches.
         for batchStart in stride(from: 2, to: totalParts + 1, by: batchSize) {
             let batchEnd = min(batchStart + batchSize - 1, totalParts)
-
-            try await withThrowingTaskGroup(of: (Int, Data).self) { group in
-                // Add child task for each part GET in current batch.
-                for partNumber in batchStart...batchEnd {
-                    group.addTask { // Each child task returns (part_number, data) tuple.
-                        return try await self.withBucketPermission(bucketName: input.bucket) {
-                            try Task.checkCancellation()
-                            let partGetObjectInput = input.deriveGetObjectInput(
-                                responseChecksumValidation: self.config.responseChecksumValidation,
-                                eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
-                                withPartNumber: partNumber
-                            )
-                            let expectedMemoryUsage = partNumber == totalParts ? objectSize % partSize : partSize
-                            // Secure memory for full part size or (possibly smaller) last part size._
-                            await self.memoryManager.waitForMemory(expectedMemoryUsage)
-                            do {
+            do {
+                await memoryManager.waitForMemory(batchMemoryUsage)
+                try await withThrowingTaskGroup(of: (Int, Data).self) { group in
+                    // Add child task for each part GET in current batch.
+                    for partNumber in batchStart...batchEnd {
+                        group.addTask { // Each child task returns (part_number, data) tuple.
+                            return try await self.withBucketPermission(bucketName: input.bucket) {
+                                try Task.checkCancellation()
+                                let partGetObjectInput = input.deriveGetObjectInput(
+                                    responseChecksumValidation: self.config.responseChecksumValidation,
+                                    eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
+                                    withPartNumber: partNumber
+                                )
                                 let partGetObjectOutput = try await s3.getObject(input: partGetObjectInput)
                                 await progressTracker.incrementPartialDownloadCount()
                                 guard let data = try await partGetObjectOutput.body?.readData() else {
                                     throw S3TMDownloadObjectError.failedToReadResponseBody
                                 }
                                 return (partNumber, data)
-                            } catch {
-                                await self.memoryManager.releaseMemory(expectedMemoryUsage)
-                                throw error
                             }
                         }
                     }
-                }
 
-                // Write results of part GETs in current batch to `input.outputStream` in order.
-                try await writeBatch(group, batchStart, input, progressTracker)
+                    // Write results of part GETs in current batch to `input.outputStream` in order.
+                    try await writeBatch(group, batchStart, input, progressTracker, batchMemoryUsage)
+                }
+            } catch {
+                // This is reached in 3 scenarios:
+                //  1. Download task failed before memory could be released.
+                //  2. Writing data failed in writeBatch before memory could be released.
+                //  3. User cancelled the root task returned by downloadObject before memory could be released.
+                await memoryManager.releaseMemory(batchMemoryUsage) // Free batch memory usage.
+                throw error
             }
         }
 
@@ -245,37 +248,44 @@ public extension S3TransferManager {
         let numberOfRequests = (objectSize / config.targetPartSizeBytes)
         - (objectSize % config.targetPartSizeBytes == 0 ? 1 : 0)
 
-        let batchSize = concurrentTaskLimitPerBucket
+        let memoryConstrainedBatchSize = config.maxInMemoryBytes / config.targetPartSizeBytes
+        let batchSize = min(memoryConstrainedBatchSize, concurrentTaskLimitPerBucket)
+        let batchMemoryUsage = batchSize * config.targetPartSizeBytes
+
         for batchStart in stride(from: 0, to: numberOfRequests, by: batchSize) {
             let batchEnd = min(batchStart + batchSize - 1, numberOfRequests - 1)
 
-            try await withThrowingTaskGroup(of: (Int, Data).self) { group in
-                // Add child task for each range GET in current batch.
-                for requestNum in batchStart...batchEnd {
-                    let (rangeGetObjectInput, rangeSize) = constructRangetGetObjectInput(
-                        input, requestNum, objectSize, eTagFromTriageGetObjectResponse
-                    )
-                    group.addTask { // Each child task returns (request_number, data) tuple.
-                        return try await self.withBucketPermission(bucketName: input.bucket) {
-                            try Task.checkCancellation()
-                            await self.memoryManager.waitForMemory(rangeSize)
-                            do {
+            do {
+                await memoryManager.waitForMemory(batchMemoryUsage)
+                try await withThrowingTaskGroup(of: (Int, Data).self) { group in
+                    // Add child task for each range GET in current batch.
+                    for requestNum in batchStart...batchEnd {
+                        let rangeGetObjectInput = constructRangetGetObjectInput(
+                            input, requestNum, objectSize, eTagFromTriageGetObjectResponse
+                        )
+                        group.addTask { // Each child task returns (request_number, data) tuple.
+                            return try await self.withBucketPermission(bucketName: input.bucket) {
+                                try Task.checkCancellation()
                                 let rangeGetObjectOutput = try await s3.getObject(input: rangeGetObjectInput)
                                 await progressTracker.incrementPartialDownloadCount()
                                 guard let data = try await rangeGetObjectOutput.body?.readData() else {
                                     throw S3TMDownloadObjectError.failedToReadResponseBody
                                 }
                                 return (requestNum, data)
-                            } catch {
-                                await self.memoryManager.releaseMemory(rangeSize)
-                                throw error
                             }
                         }
                     }
-                }
 
-                // Write results of range GETs in current batch to `input.outputStream` in order.
-                try await writeBatch(group, batchStart, input, progressTracker)
+                    // Write results of range GETs in current batch to `input.outputStream` in order.
+                    try await writeBatch(group, batchStart, input, progressTracker, batchMemoryUsage)
+                }
+            } catch {
+                // This is reached in 3 scenarios:
+                //  1. Download task failed before memory could be released.
+                //  2. Writing data failed in writeBatch before memory could be released.
+                //  3. User cancelled the root task returned by downloadObject before memory could be released.
+                await memoryManager.releaseMemory(batchMemoryUsage) // Free batch memory usage.
+                throw error
             }
         }
 
@@ -293,55 +303,40 @@ public extension S3TransferManager {
         _ requestNum: Int,
         _ objectSize: Int,
         _ eTagFromTriageGetObjectResponse: String?
-    ) -> (GetObjectInput, Int) {
+    ) -> GetObjectInput {
         // Subrange start is always offset by +1 due to triage getObject request.
         let subRangeStart = (requestNum + 1) * config.targetPartSizeBytes
         // End byte is inclusive, so must subtract 1 to get target byte amount.
         let subRangeEnd = min(subRangeStart + config.targetPartSizeBytes - 1, objectSize - 1)
-        let derivedRangeGetObjectInput = input.deriveGetObjectInput(
+        return input.deriveGetObjectInput(
             responseChecksumValidation: self.config.responseChecksumValidation,
             eTagFromTriageGetObjectResponse: eTagFromTriageGetObjectResponse,
             withRange: "bytes=\(subRangeStart)-\(subRangeEnd)"
         )
-        let rangeSize = subRangeEnd - subRangeStart + 1
-        return (derivedRangeGetObjectInput, rangeSize)
     }
 
     private func writeBatch(
         _ group: ThrowingTaskGroup<(Int, Data), any Error>,
         _ batchStart: Int,
         _ input: DownloadObjectInput,
-        _ progressTracker: ObjectTransferProgressTracker
+        _ progressTracker: ObjectTransferProgressTracker,
+        _ batchMemoryUsage: Int
     ) async throws {
         // Temporary buffer used to ensure correct ordering of data when writing to the output stream.
         var buffer = [Int: Data]()
 
         var nextDataToProcess = batchStart
-        do {
-            for try await (index, data) in group {
-                buffer[index] = data
-                while let nextData = buffer[nextDataToProcess] {
-                    try await writeData(nextData, input, progressTracker)
-                    // Discard data after it's written to the output stream.
-                    buffer.removeValue(forKey: nextDataToProcess)
-                    await memoryManager.releaseMemory(nextData.count)
-                    nextDataToProcess += 1
-                }
+        for try await (index, data) in group {
+            buffer[index] = data
+            while let nextData = buffer[nextDataToProcess] {
+                try await writeData(nextData, input, progressTracker)
+                // Discard data after it's written to the output stream.
+                buffer.removeValue(forKey: nextDataToProcess)
+                nextDataToProcess += 1
             }
-        } catch {
-            // This catch can be reached in three ways:
-            // 1. If a task failed.
-            // 2. If a writeData call failed with an error.
-            // 3. If root task returned by downloadObject() is cancelled by user.
-            //
-            // When error is thrown from here, the throwing task group upstream sees it and sends task cancellation signal to all tasks.
-            // Each task definition has a catch block that releases assumed memory if it fails before returning fully-read data.
-            // So only the memory usage for finished tasks whose data is saved in buffer need to be cleared.
-            for (_, remainingData) in buffer {
-                await memoryManager.releaseMemory(remainingData.count)
-            }
-            throw error
         }
+        // Now that all data in batch is written, release batch memory usage.
+        await memoryManager.releaseMemory(batchMemoryUsage)
     }
 
     internal func writeData(
