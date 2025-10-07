@@ -148,6 +148,9 @@ jobs:
           cd aws-sdk-swift-s3-transfer-manager
           swift build --build-tests
       - name: Run Integration Tests
+        # File descriptor limit is 1024 by default for Linux in GH.
+        # This has to be increased to allow concurrent download integration test.
         run: |
+          ulimit -n 65536
           cd aws-sdk-swift-s3-transfer-manager
           swift test --filter S3TransferManagerIntegrationTests
