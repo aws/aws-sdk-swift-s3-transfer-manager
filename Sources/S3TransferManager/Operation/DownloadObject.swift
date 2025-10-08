@@ -348,13 +348,11 @@ public extension S3TransferManager {
         if input.outputStream.streamStatus == .notOpen { input.outputStream.open() }
         // Write to output stream.
         let bytesWritten = data.withUnsafeBytes { bufferPointer -> Int in
-            guard let baseAddress = bufferPointer.baseAddress else { return -1 }
-            return input.outputStream.write(
-                baseAddress.assumingMemoryBound(to: UInt8.self),
-                maxLength: bufferPointer.count
-            )
+            guard let bytePointer = bufferPointer.assumingMemoryBound(to: UInt8.self).baseAddress else { return -1 }
+            return input.outputStream.write(bytePointer, maxLength: data.count)
         }
         if bytesWritten < 0 { throw S3TMDownloadObjectError.failedToWriteToOutputStream }
+        logger.debug("DownloadObject \(input.id): wrote \(bytesWritten) to output stream.")
         let transferredBytes = await progressTracker.addBytes(bytesWritten)
         input.transferListeners.forEach { $0.onBytesTransferred(
             input: input,
