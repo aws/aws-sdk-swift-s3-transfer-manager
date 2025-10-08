@@ -81,7 +81,8 @@ public extension S3TransferManager {
         }
 
         try await writeData(outputData, downloadObjectInput, progressTracker)
-        return getObjectOutput
+        // Remove reference to body now that it's written.
+        return removeBodyFromTriageGetObjectOutput(getObjectOutput)
     }
 
     private func getObjectInParts(
@@ -359,6 +360,51 @@ public extension S3TransferManager {
             input: input,
             snapshot: SingleObjectTransferProgressSnapshot(transferredBytes: transferredBytes)
         )}
+    }
+
+    private func removeBodyFromTriageGetObjectOutput(
+        _ triageGetObjectOutput: GetObjectOutput
+    ) -> GetObjectOutput {
+        return GetObjectOutput(
+            acceptRanges: triageGetObjectOutput.acceptRanges,
+            body: nil,
+            bucketKeyEnabled: triageGetObjectOutput.bucketKeyEnabled,
+            cacheControl: triageGetObjectOutput.cacheControl,
+            checksumCRC32: triageGetObjectOutput.checksumCRC32,
+            checksumCRC32C: triageGetObjectOutput.checksumCRC32C,
+            checksumCRC64NVME: triageGetObjectOutput.checksumCRC64NVME,
+            checksumSHA1: triageGetObjectOutput.checksumSHA1,
+            checksumSHA256: triageGetObjectOutput.checksumSHA256,
+            checksumType: triageGetObjectOutput.checksumType,
+            contentDisposition: triageGetObjectOutput.contentDisposition,
+            contentEncoding: triageGetObjectOutput.contentEncoding,
+            contentLanguage: triageGetObjectOutput.contentLanguage,
+            contentLength: triageGetObjectOutput.contentLength,
+            contentRange: triageGetObjectOutput.contentRange,
+            contentType: triageGetObjectOutput.contentType,
+            deleteMarker: triageGetObjectOutput.deleteMarker,
+            eTag: triageGetObjectOutput.eTag,
+            expiration: triageGetObjectOutput.expiration,
+            expires: triageGetObjectOutput.expires,
+            lastModified: triageGetObjectOutput.lastModified,
+            metadata: triageGetObjectOutput.metadata,
+            missingMeta: triageGetObjectOutput.missingMeta,
+            objectLockLegalHoldStatus: triageGetObjectOutput.objectLockLegalHoldStatus,
+            objectLockMode: triageGetObjectOutput.objectLockMode,
+            objectLockRetainUntilDate: triageGetObjectOutput.objectLockRetainUntilDate,
+            partsCount: triageGetObjectOutput.partsCount,
+            replicationStatus: triageGetObjectOutput.replicationStatus,
+            requestCharged: triageGetObjectOutput.requestCharged,
+            restore: triageGetObjectOutput.restore,
+            serverSideEncryption: triageGetObjectOutput.serverSideEncryption,
+            sseCustomerAlgorithm: triageGetObjectOutput.sseCustomerAlgorithm,
+            sseCustomerKeyMD5: triageGetObjectOutput.sseCustomerKeyMD5,
+            ssekmsKeyId: triageGetObjectOutput.ssekmsKeyId,
+            storageClass: triageGetObjectOutput.storageClass,
+            tagCount: triageGetObjectOutput.tagCount,
+            versionId: triageGetObjectOutput.versionId,
+            websiteRedirectLocation: triageGetObjectOutput.websiteRedirectLocation
+        )
     }
 }
 
