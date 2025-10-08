@@ -120,7 +120,6 @@ jobs:
           - jammy
         version:
           - "5.9"
-          - "6.2"
     steps:
       - name: Configure AWS Credentials for Integration Tests
         uses: aws-actions/configure-aws-credentials@v4
