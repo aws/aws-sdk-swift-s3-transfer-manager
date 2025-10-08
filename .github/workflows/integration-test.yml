@@ -149,5 +149,6 @@ jobs:
           swift build --build-tests
       - name: Run Integration Tests
         run: |
+          ulimit -n 2048
           cd aws-sdk-swift-s3-transfer-manager
           swift test --filter S3TransferManagerIntegrationTests
