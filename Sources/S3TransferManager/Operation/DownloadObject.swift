@@ -346,15 +346,37 @@ public extension S3TransferManager {
         _ progressTracker: ObjectTransferProgressTracker
     ) async throws {
         if input.outputStream.streamStatus == .notOpen { input.outputStream.open() }
-        // Write to output stream.
-        let bytesWritten = data.withUnsafeBytes { bufferPointer -> Int in
-            guard let baseAddress = bufferPointer.baseAddress else { return -1 }
-            return input.outputStream.write(
-                baseAddress.assumingMemoryBound(to: UInt8.self),
-                maxLength: bufferPointer.count
-            )
+        // Write to output stream with retry logic for transient failures.
+        var bytesWritten = 0
+        var remainingData = data
+
+        while !remainingData.isEmpty {
+            let written = remainingData.withUnsafeBytes { bufferPointer -> Int in
+                guard let baseAddress = bufferPointer.baseAddress else { return -1 }
+                return input.outputStream.write(
+                    baseAddress.assumingMemoryBound(to: UInt8.self),
+                    maxLength: bufferPointer.count
+                )
+            }
+
+            if written < 0 {
+                if input.outputStream.streamError != nil {
+                    throw S3TMDownloadObjectError.failedToWriteToOutputStream
+                }
+                // Jittered backoff to avoid retry storms
+                let jitter = UInt64.random(in: 1_000_000...10_000_000) // 1-10ms
+                try await Task.sleep(nanoseconds: jitter)
+                continue
+            }
+
+            if written == 0 {
+                throw S3TMDownloadObjectError.failedToWriteToOutputStream
+            }
+
+            bytesWritten += written
+            remainingData = remainingData.dropFirst(written)
         }
-        if bytesWritten < 0 { throw S3TMDownloadObjectError.failedToWriteToOutputStream }
+
         let transferredBytes = await progressTracker.addBytes(bytesWritten)
         input.transferListeners.forEach { $0.onBytesTransferred(
             input: input,
