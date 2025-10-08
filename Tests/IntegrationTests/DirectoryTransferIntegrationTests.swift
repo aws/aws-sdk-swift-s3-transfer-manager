@@ -24,6 +24,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
 
     override func setUp() async throws {
         let s3ClientConfig = try await S3Client.S3ClientConfiguration(region: region)
+        s3ClientConfig.httpClientConfiguration.maxConnections = 20
         let tmConfig = try await S3TransferManagerConfig(
             s3ClientConfig: s3ClientConfig,
             multipartUploadThresholdBytes: 10 * 1024 * 1024  // 10MB
