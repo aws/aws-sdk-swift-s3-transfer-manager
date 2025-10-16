@@ -380,14 +380,21 @@ private actor DownloadTracker {
 
 /// A non-exhaustive list of errors that can be thrown by the `downloadBucket` operation of `S3TransferManager`.
 public enum S3TMDownloadBucketError: Error {
+    /// Thrown when the destination URL is not a directory.
     case ProvidedDestinationIsNotADirectory
+    /// Thrown when directory doesn't exist at provided destination URL and creating a new directory fails.
     case FailedToCreateDestinationDirectory
+    /// Thrown when there's no object in the bucket that fits the download criteria.
     case FailedToRetrieveObjectsUsingListObjectsV2
+    /// Thrown when creating a new output stream for an individual download object call fails.
     case FailedToCreateOutputStreamForFileURL(url: URL)
+    /// Thrown when an individual donwload object call fails. Wraps the bubbled up error as well as the `DownloadObjectInput` used for the failed call.
     case FailedToDownloadAnObject(
         originalErrorFromDownloadObject: Error,
         failedDownloadObjectInput: DownloadObjectInput
     )
+    /// Thrown when creating nested directories inside destination directory fails. Nested directories get created to mirror bucket contents.
     case FailedToCreateNestedDestinationDirectory(at: URL)
+    /// Thrown when atomic rename operation for a file fails after download completion.
     case FailedToRenameTemporaryFileAfterDownload(tempFile: URL)
 }

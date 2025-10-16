@@ -264,9 +264,7 @@ public extension S3TransferManager {
         let partOffset = (partNumber - 1) * partSize
         // Either take full part size or remainder (only for the last part).
         let resolvedPartSize = min(partSize, payloadSize - partOffset)
-        // Secure memory for part.
-        await memoryManager.waitForMemory(resolvedPartSize)
-        do {
+        return try await withMemoryPermission(memoryUsage: resolvedPartSize) {
             let partData = try await {
                 let partData = try await self.readPartData(
                     input: input,
@@ -298,8 +296,6 @@ public extension S3TransferManager {
                 input: input,
                 snapshot: snapshot
             )}
-            // Release memory for part.
-            await memoryManager.releaseMemory(resolvedPartSize)
             return S3ClientTypes.CompletedPart(
                 checksumCRC32: uploadPartOutput.checksumCRC32,
                 checksumCRC32C: uploadPartOutput.checksumCRC32C,
@@ -308,10 +304,6 @@ public extension S3TransferManager {
                 eTag: uploadPartOutput.eTag,
                 partNumber: partNumber
             )
-        } catch {
-            // In case of error, release memory for failed part.
-            await memoryManager.releaseMemory(resolvedPartSize)
-            throw error
         }
     }
 
@@ -353,12 +345,19 @@ public extension S3TransferManager {
 
 /// A non-exhaustive list of errors that can be thrown by the `uploadObject` operation of `S3TransferManager`.
 public enum S3TMUploadObjectError: Error {
+    /// Uploading a stream payload of unknown length is not supported.
     case streamPayloadOfUnknownLength
+    /// Thrown when initiating multipart upload fails.
     case failedToCreateMPU
+    /// Thrown when reading from the provided input body fails.
     case failedToReadPart
+    /// Thrown when aborting multipart upload fails. Wraps the error that caused transfer manager to abort MPU, as well the error, if any, from call to abort multipart upload.
     case failedToAbortMPU(errorFromMPUOperation: Error, errorFromFailedAbortMPUOperation: Error)
+    /// Uploading an unseekable stream payload is not supported.
     case unseekableStreamPayload
+    /// Thrown when the number of parts to upload calculated before upload does not match the actual number of parts uploaded. This should never happen.
     case incorrectNumberOfUploadedParts(message: String)
+    /// Thrown when the size of the part read from input body does not match the expected size. This should never happen.
     case incorrectSizePartRead(expected: Int, actual: Int)
 }
 

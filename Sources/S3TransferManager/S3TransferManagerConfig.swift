@@ -39,7 +39,7 @@ public class S3TransferManagerConfig {
     ///    - requestChecksumCalculation: Specifies when checksum should be calculated for requests (e.g., upload operations). This value overrides the value provided in `s3ClientConfig`. Default value is `.whenSupported`, which means transfer manager will automatically calculate checksum in absence of full object checksum in operation input.
     ///    - responseChecksumValidation: Specifies when checksm should be validated for responses (e.g., download operations). This value overrides the value provided in `s3ClientConfig`. Default value is `.whenSupported`, which means transfer manager will automatically calculate checksum and validate it against checksum returned in the response.
     ///    - multipartDownloadType: Specifies the behavior of multipart download operations. Default value is `.part`, which configures individual `getObject` calls to use part numbers for multipart downloads. The other option is `.range`, which uses the byte range of the S3 object for multipart downloads. If what you want to download was uploaded without using multipart upload (therefore there's no part number available), then you should use `.range`.
-    ///    - maxInMemoryBytes: Specifies the maximum number of bytes of parts held in memory for the S3TransferManager instance. Default vaule is 6GB for macOS and Linux, 1GB for iOS and tvOS, and 100MB for watchOS. Note that acutal memory usage of S3TransferManager instance can be greater, as this value only limits number of bytes held in memory during upload and download.
+    ///    - maxInMemoryBytes: Specifies the maximum number of bytes of parts held in memory for the S3TransferManager instance. Default vaule is 6GB for macOS and Linux, 500MB for iOS and tvOS, and 50MB for watchOS. Note that acutal memory usage of S3TransferManager instance can be greater, as this value only limits number of bytes held in memory during upload and download.
     public init(
         s3ClientConfig: S3Client.S3ClientConfiguration? = nil,
         targetPartSizeBytes: Int = 8 * 1024 * 1024,
@@ -73,13 +73,13 @@ public class S3TransferManagerConfig {
         self.multipartDownloadType = multipartDownloadType
         self.maxInMemoryBytes = maxInMemoryBytes ?? {
         #if os(macOS) || os(Linux)
-            return 6 * 1024 * 1024 * 1024  // 6GB
+            return 6 * 1024 * 1024 * 1024 // 6GB
         #elseif os(iOS) || os(tvOS)
-            return 1 * 1024 * 1024 * 1024  // 1GB
+            return 500 * 1024 * 1024 // 500MB
         #elseif os(watchOS)
-            return 100 * 1024 * 1024       // 100MB
+            return 50 * 1024 * 1024 // 50MB
         #else
-            return 1 * 1024 * 1024 * 1024  // 1GB default
+            return 1 * 1024 * 1024 * 1024 // 1GB default
         #endif
         }()
     }

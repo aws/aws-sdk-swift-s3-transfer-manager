@@ -260,12 +260,6 @@ public extension S3TransferManager {
 
     internal func getResolvedObjectKey(of url: URL, inDir dir: URL, input: UploadDirectoryInput) throws -> String {
         let delimiter = "/"
-        // Throw validation exception if the file name contains delimiter.
-        if url.lastPathComponent.contains(delimiter) {
-            throw S3TMUploadDirectoryError.InvalidFileName(
-                "The file \"\(url.absoluteString)\" has \"\(delimiter)\" in its name."
-            )
-        }
         // Append delimiter to s3Prefix if it does not already end with it.
         var resolvedPrefix: String = ""
         if let providedPrefix = input.s3Prefix {
@@ -293,10 +287,11 @@ private actor UploadTracker {
 
 /// A non-exhaustive list of errors that can be thrown by the `uploadDirectory` operation of `S3TransferManager`.
 public enum S3TMUploadDirectoryError: Error {
+    /// Thrown when provided source URL is not a directory URL.
     case InvalidSourceURL(String)
+    /// Thrown when an individual upload object call fails. Wraps the bubbled up error as well as  the `UploadObjectInput` used for the failed call.
     case FailedToUploadAnObject(
         originalErrorFromUploadObject: Error,
         failedUploadObjectInput: UploadObjectInput
     )
-    case InvalidFileName(String)
 }

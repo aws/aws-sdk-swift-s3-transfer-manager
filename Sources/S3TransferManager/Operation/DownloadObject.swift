@@ -129,8 +129,7 @@ public extension S3TransferManager {
         // Process all parts in batches.
         for batchStart in stride(from: 2, to: totalParts + 1, by: batchSize) {
             let batchEnd = min(batchStart + batchSize - 1, totalParts)
-            do {
-                await memoryManager.waitForMemory(batchMemoryUsage)
+            try await withMemoryPermission(memoryUsage: batchMemoryUsage) {
                 try await withThrowingTaskGroup(of: (Int, Data).self) { group in
                     // Add child task for each part GET in current batch.
                     for partNumber in batchStart...batchEnd {
@@ -155,13 +154,6 @@ public extension S3TransferManager {
                     // Write results of part GETs in current batch to `input.outputStream` in order.
                     try await writeBatch(group, batchStart, input, progressTracker, batchMemoryUsage)
                 }
-            } catch {
-                // This is reached in 3 scenarios:
-                //  1. Download task failed before memory could be released.
-                //  2. Writing data failed in writeBatch before memory could be released.
-                //  3. User cancelled the root task returned by downloadObject before memory could be released.
-                await memoryManager.releaseMemory(batchMemoryUsage) // Free batch memory usage.
-                throw error
             }
         }
 
@@ -170,7 +162,7 @@ public extension S3TransferManager {
         // Actual number of parts downloaded by the end of this function must be totalParts - 1 because
         //  the triage getObject downloaded the first part.
         guard actualDownloadedPartsCount == totalParts - 1 else {
-            throw S3TMDownloadObjectError.unexpectedNumberOfRangedGetObjectCalls(
+            throw S3TMDownloadObjectError.unexpectedNumberOfPartNumberGetObjectCalls(
                 expected: totalParts, actual: actualDownloadedPartsCount + 1
             )
         }
@@ -256,8 +248,7 @@ public extension S3TransferManager {
         for batchStart in stride(from: 0, to: numberOfRequests, by: batchSize) {
             let batchEnd = min(batchStart + batchSize - 1, numberOfRequests - 1)
 
-            do {
-                await memoryManager.waitForMemory(batchMemoryUsage)
+            try await withMemoryPermission(memoryUsage: batchMemoryUsage) {
                 try await withThrowingTaskGroup(of: (Int, Data).self) { group in
                     // Add child task for each range GET in current batch.
                     for requestNum in batchStart...batchEnd {
@@ -280,13 +271,6 @@ public extension S3TransferManager {
                     // Write results of range GETs in current batch to `input.outputStream` in order.
                     try await writeBatch(group, batchStart, input, progressTracker, batchMemoryUsage)
                 }
-            } catch {
-                // This is reached in 3 scenarios:
-                //  1. Download task failed before memory could be released.
-                //  2. Writing data failed in writeBatch before memory could be released.
-                //  3. User cancelled the root task returned by downloadObject before memory could be released.
-                await memoryManager.releaseMemory(batchMemoryUsage) // Free batch memory usage.
-                throw error
             }
         }
 
@@ -336,8 +320,6 @@ public extension S3TransferManager {
                 nextDataToProcess += 1
             }
         }
-        // Now that all data in batch is written, release batch memory usage.
-        await memoryManager.releaseMemory(batchMemoryUsage)
     }
 
     internal func writeData(
@@ -408,12 +390,16 @@ public extension S3TransferManager {
 
 /// A non-exhaustive list of errors that can be thrown by the `downloadObject` operation of `S3TransferManager`.
 public enum S3TMDownloadObjectError: Error {
+    /// Thrown when reading from the download stream fails.
     case failedToReadResponseBody
+    /// Thrown when triage request's response does not contain a content range header. This should never happen.
     case failedToDetermineObjectSize
-    case invalidDownloadConfiguration
+    /// Thrown when writing the data read from S3 to output stream fails.
     case failedToWriteToOutputStream
-    case invalidRangeFormat(String)
+    /// Thrown when the numer of range GET calls made doesn't match the expected number of range GET calls. This should never happen.
     case unexpectedNumberOfRangedGetObjectCalls(expected: Int, actual: Int)
+    /// Thrown when the numer of part GET calls made doesn't match the expected number of part GET calls. This should never happen.
     case unexpectedNumberOfPartNumberGetObjectCalls(expected: Int, actual: Int)
+    /// Thrown when triage request's response doesn't have content length header. This should never happen.
     case failedToDeterminePartSizeForPartDownload
 }

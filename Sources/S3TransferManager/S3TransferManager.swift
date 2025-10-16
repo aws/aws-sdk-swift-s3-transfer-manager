@@ -95,6 +95,22 @@ internal extension S3TransferManager {
         }
     }
 
+    func withMemoryPermission<T>(
+        memoryUsage: Int,
+        operation: () async throws -> T
+    ) async throws -> T {
+        await memoryManager.waitForMemory(memoryUsage)
+
+        do {
+            let result = try await operation()
+            await memoryManager.releaseMemory(memoryUsage)
+            return result
+        } catch {
+            await memoryManager.releaseMemory(memoryUsage)
+            throw error
+        }
+    }
+
     // An actor used to keep track of number of transferred bytes in single object transfer operations.
     // For downloadObject operation, it's used to keep track of number of partial downloads after
     //  the initial triage GetObject request. It counts either number of parts for part GETs or number of
