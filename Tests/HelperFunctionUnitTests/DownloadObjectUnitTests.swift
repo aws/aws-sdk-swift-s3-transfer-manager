@@ -80,68 +80,6 @@ class DownloadObjectUnitTests: S3TMUnitTestCase {
         XCTAssertEqual(writtenData, expectedData)
     }
 
-    // MARK: - writeByteStream tests.
-
-    func testWriteByteStreamToFileOutputStream() async throws {
-        // Create output stream & dummy byte stream to write to output stream.
-        let (fileOutputStream, tempFileURL) = try getEmptyFileOutputStream()
-        let byteStream = getDummyByteStream()
-
-        // Write dummy byte stream to output stream.
-        try await DownloadObjectUnitTests.tm.writeByteStream(
-            byteStream,
-            makeDummyInput(with: fileOutputStream),
-            dummyProgressTracker
-        )
-
-        // Assert on correct write.
-        fileOutputStream.close()
-        let writtenData = try Data(contentsOf: tempFileURL)
-        let expectedData = Data("0123456789abcde".utf8)
-        XCTAssertEqual(writtenData, expectedData)
-
-        // Cleanup.
-        try deleteTempFile(tempFileURL: tempFileURL)
-    }
-
-    func testWriteByteStreamToMemoryOutputStream() async throws {
-        // Create output stream & dummy byte stream to write to output stream.
-        let memoryOutputStream = OutputStream.toMemory()
-        let byteStream = getDummyByteStream()
-
-        // Write dummy byte stream to output stream.
-        try await DownloadObjectUnitTests.tm.writeByteStream(
-            byteStream,
-            makeDummyInput(with: memoryOutputStream),
-            dummyProgressTracker
-        )
-
-        // Assert on correct write.
-        memoryOutputStream.close()
-        let writtenData = memoryOutputStream.property(forKey: .dataWrittenToMemoryStreamKey) as! Data
-        let expectedData = Data("0123456789abcde".utf8)
-        XCTAssertEqual(writtenData, expectedData)
-    }
-
-    func testWriteByteStreamToRawByteBufferStream() async throws {
-        // Create output stream & dummy byte stream to write to output stream.
-        let (rawByteBufferOutputStream, buffer) = try getEmptyRawByteBufferOutputStream(bufferCount: 15)
-        let byteStream = getDummyByteStream()
-
-        // Write dummy byte stream to output stream.
-        try await DownloadObjectUnitTests.tm.writeByteStream(
-            byteStream,
-            makeDummyInput(with: rawByteBufferOutputStream),
-            dummyProgressTracker
-        )
-
-        // Assert on correct write.
-        rawByteBufferOutputStream.close()
-        let writtenData = Data(buffer.prefix { $0 != 0 })
-        let expectedData = Data("0123456789abcde".utf8)
-        XCTAssertEqual(writtenData, expectedData)
-    }
-
     // MARK: - Utility functions.
 
     private func getEmptyFileOutputStream() throws -> (OutputStream, tempFileURL: URL) {

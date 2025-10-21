@@ -146,6 +146,8 @@ class UploadDirectoryIntegTests: XCTestCase {
         )
     }
 
+    // Between different Linux versions, symlink resolution behaviors differ.
+    #if !os(Linux)
     func testUploadDirectory_FollowSymlink() async throws {
         try await runUploadDirectoryTest(
             input: UploadDirectoryInput(
@@ -198,6 +200,7 @@ class UploadDirectoryIntegTests: XCTestCase {
             ]
         )
     }
+    #endif
 
     // MARK: - Helper functions.
 

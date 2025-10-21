@@ -261,45 +261,50 @@ public extension S3TransferManager {
         uploadID: String
     ) async throws -> S3ClientTypes.CompletedPart {
         try Task.checkCancellation()
-        let partData = try await {
-            let partOffset = (partNumber - 1) * partSize
-            // Either take full part size or remainder (only for the last part).
-            let resolvedPartSize = min(partSize, payloadSize - partOffset)
-            let partData = try await self.readPartData(
-                input: input,
-                partSize: resolvedPartSize,
-                partOffset: partOffset,
-                byteStreamPartReader: byteStreamPartReader
+        let partOffset = (partNumber - 1) * partSize
+        // Either take full part size or remainder (only for the last part).
+        let resolvedPartSize = min(partSize, payloadSize - partOffset)
+        return try await withMemoryPermission(memoryUsage: resolvedPartSize) {
+            let partData = try await {
+                let partData = try await self.readPartData(
+                    input: input,
+                    partSize: resolvedPartSize,
+                    partOffset: partOffset,
+                    byteStreamPartReader: byteStreamPartReader
+                )
+                guard partData.count == resolvedPartSize else {
+                    throw S3TMUploadObjectError.incorrectSizePartRead(
+                        expected: resolvedPartSize,
+                        actual: partData.count
+                    )
+                }
+                return partData
+            }()
+
+            let uploadPartInput = input.deriveUploadPartInput(
+                body: ByteStream.data(partData),
+                partNumber: partNumber,
+                uploadID: uploadID
             )
-            guard partData.count == resolvedPartSize else {
-                throw S3TMUploadObjectError.incorrectSizePartRead(expected: resolvedPartSize, actual: partData.count)
-            }
-            return partData
-        }()
+            let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
 
-        let uploadPartInput = input.deriveUploadPartInput(
-            body: ByteStream.data(partData),
-            partNumber: partNumber,
-            uploadID: uploadID
-        )
-        let uploadPartOutput = try await s3.uploadPart(input: uploadPartInput)
-
-        let snapshot = SingleObjectTransferProgressSnapshot(
-            transferredBytes: await progressTracker.addBytes(partData.count),
-            totalBytes: payloadSize
-        )
-        input.transferListeners.forEach { $0.onBytesTransferred(
-            input: input,
-            snapshot: snapshot
-        )}
-        return S3ClientTypes.CompletedPart(
-            checksumCRC32: uploadPartOutput.checksumCRC32,
-            checksumCRC32C: uploadPartOutput.checksumCRC32C,
-            checksumSHA1: uploadPartOutput.checksumSHA1,
-            checksumSHA256: uploadPartOutput.checksumSHA256,
-            eTag: uploadPartOutput.eTag,
-            partNumber: partNumber
-        )
+            let snapshot = SingleObjectTransferProgressSnapshot(
+                transferredBytes: await progressTracker.addBytes(partData.count),
+                totalBytes: payloadSize
+            )
+            input.transferListeners.forEach { $0.onBytesTransferred(
+                input: input,
+                snapshot: snapshot
+            )}
+            return S3ClientTypes.CompletedPart(
+                checksumCRC32: uploadPartOutput.checksumCRC32,
+                checksumCRC32C: uploadPartOutput.checksumCRC32C,
+                checksumSHA1: uploadPartOutput.checksumSHA1,
+                checksumSHA256: uploadPartOutput.checksumSHA256,
+                eTag: uploadPartOutput.eTag,
+                partNumber: partNumber
+            )
+        }
     }
 
     internal func readPartData(
@@ -340,12 +345,19 @@ public extension S3TransferManager {
 
 /// A non-exhaustive list of errors that can be thrown by the `uploadObject` operation of `S3TransferManager`.
 public enum S3TMUploadObjectError: Error {
+    /// Uploading a stream payload of unknown length is not supported.
     case streamPayloadOfUnknownLength
+    /// Thrown when initiating multipart upload fails.
     case failedToCreateMPU
+    /// Thrown when reading from the provided input body fails.
     case failedToReadPart
+    /// Thrown when aborting multipart upload fails. Wraps the error that caused transfer manager to abort MPU, as well the error, if any, from call to abort multipart upload.
     case failedToAbortMPU(errorFromMPUOperation: Error, errorFromFailedAbortMPUOperation: Error)
+    /// Uploading an unseekable stream payload is not supported.
     case unseekableStreamPayload
+    /// Thrown when the number of parts to upload calculated before upload does not match the actual number of parts uploaded. This should never happen.
     case incorrectNumberOfUploadedParts(message: String)
+    /// Thrown when the size of the part read from input body does not match the expected size. This should never happen.
     case incorrectSizePartRead(expected: Int, actual: Int)
 }
 

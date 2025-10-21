@@ -113,10 +113,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        runner:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
         os:
           - jammy
         version:
-          - "6.0"
+          - "5.9"
     steps:
       - name: Configure AWS Credentials for Integration Tests
         uses: aws-actions/configure-aws-credentials@v4
@@ -149,5 +152,6 @@ jobs:
           swift build --build-tests
       - name: Run Integration Tests
         run: |
+          ulimit -n 2048
           cd aws-sdk-swift-s3-transfer-manager
           swift test --filter S3TransferManagerIntegrationTests
