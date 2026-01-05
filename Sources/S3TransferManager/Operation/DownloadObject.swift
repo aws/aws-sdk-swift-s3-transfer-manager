@@ -75,7 +75,10 @@ public extension S3TransferManager {
             let getObjectOutput = try await s3.getObject(input: getObjectInput)
             // Write returned data to user-provided output stream & return.
             guard let outputData = try await getObjectOutput.body?.readData() else {
-                throw S3TMDownloadObjectError.failedToReadResponseBody
+                if getObjectOutput.contentLength != 0 {
+                    throw S3TMDownloadObjectError.failedToReadResponseBody
+                }
+                return (getObjectOutput, Data())
             }
             return (getObjectOutput, outputData)
         }
@@ -198,6 +201,11 @@ public extension S3TransferManager {
     private func determineObjectSize(
         _ getObjectOutput: GetObjectOutput
     ) throws -> Int {
+        // If Triage getObject's response has zero-length body, object is empty. Return 0.
+        if let contentLength = getObjectOutput.contentLength, contentLength == 0 {
+            return 0
+        }
+
         // Determine full object size from first output's Content-Range header.
         guard let contentRange = getObjectOutput.contentRange else {
             throw S3TMDownloadObjectError.failedToDetermineObjectSize
