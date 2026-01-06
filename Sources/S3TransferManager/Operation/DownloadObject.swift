@@ -75,7 +75,7 @@ public extension S3TransferManager {
             let getObjectOutput = try await s3.getObject(input: getObjectInput)
             // Write returned data to user-provided output stream & return.
             guard let outputData = try await getObjectOutput.body?.readData() else {
-                if getObjectOutput.contentLength != 0 {
+                guard getObjectOutput.contentLength == 0 else {
                     throw S3TMDownloadObjectError.failedToReadResponseBody
                 }
                 return (getObjectOutput, Data())
