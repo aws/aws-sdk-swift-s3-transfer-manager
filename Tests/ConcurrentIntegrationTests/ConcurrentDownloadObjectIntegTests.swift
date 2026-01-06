@@ -10,6 +10,7 @@ import S3TransferManager
 @testable import TestUtil
 import XCTest
 
+#if os(macOS)
 class ConcurrentDownloadObjectIntegTests: XCTestCase {
     /*
         In setUp:
@@ -149,3 +150,4 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
         }
     }
 }
+#endif
