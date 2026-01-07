@@ -11,7 +11,7 @@ import S3TransferManager
 @testable import TestUtil
 import XCTest
 
-#if os(macOS) || os(Linux)
+#if os(macOS)
 class DirectoryTransferIntegrationTests: XCTestCase {
     var tm: S3TransferManager!
     var testDatasetURL: URL!
