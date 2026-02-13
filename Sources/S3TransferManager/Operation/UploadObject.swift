@@ -174,7 +174,9 @@ public extension S3TransferManager {
             // The + 9999 makes the integer division to be ceiling, to make sure 10000 parts of partSize
             //  fully covers the payloadSize.
             let partSize = max(config.targetPartSizeBytes, (payloadSize + 9999)/10000)
-            let numParts = payloadSize / partSize
+            // If partSize * numParts is less than payloadSize, that means payloadSize / partSize < 10000.
+            // So we can safely add 1 to cover the entire payload.
+            let numParts = payloadSize / partSize + (partSize * numParts < payloadSize ? 1 : 0)
             let createMPUInput = input.deriveCreateMultipartUploadInput()
             let createMPUOutput = try await s3.createMultipartUpload(input: createMPUInput)
 
