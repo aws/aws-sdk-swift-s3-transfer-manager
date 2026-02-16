@@ -171,18 +171,20 @@ public extension S3TransferManager {
     ) async throws -> (uploadID: String, numParts: Int, partSize: Int) {
         return try await withBucketPermission(bucketName: input.bucket) {
             // Determine part size. Division by 10,000 is bc MPU supports 10,000 parts maximum.
-            let partSize = max(config.targetPartSizeBytes, payloadSize/10000)
-            // Add 1 if there should be a last part smaller than regular part size.
-            // E.g., say payloadSize is 103 and partSize is 10. Then we need 11 parts,
-            //  where the 11th part is only 3 bytes long.
-            let numParts = (payloadSize / partSize) + (payloadSize % partSize == 0 ? 0 : 1)
+            // The + 9999 makes the integer division to be ceiling, to make sure 10000 parts of partSize
+            //  fully covers the payloadSize.
+            let partSize = max(config.targetPartSizeBytes, (payloadSize + 9999)/10000)
+            // Add 1 if there's remainder & partSize * numParts doesn't fully cover payload.
+            // It's safe to add 1 because if payload isn't fully covered that means numParts < 10000.
+            let numParts = payloadSize / partSize
+            let resolvedNumParts = numParts + (partSize * numParts < payloadSize ? 1 : 0)
             let createMPUInput = input.deriveCreateMultipartUploadInput()
             let createMPUOutput = try await s3.createMultipartUpload(input: createMPUInput)
 
             guard let uploadID = createMPUOutput.uploadId else {
                 throw S3TMUploadObjectError.failedToCreateMPU
             }
-            return (uploadID, numParts, partSize)
+            return (uploadID, resolvedNumParts, partSize)
         }
     }
 
