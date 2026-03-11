@@ -57,7 +57,7 @@ class DownloadObjectIntegTests: XCTestCase {
 
                     // Upload once using MPU with key "MPU-100MB" by using S3TM.
                     _ = try await S3TransferManager(config: S3TransferManagerConfig(
-                        s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
+                        s3ClientConfig: S3Client.S3ClientConfig(region: region)
                     ))
                         .uploadObject(input: UploadObjectInput(
                             body: .data(objectData),
@@ -184,7 +184,7 @@ class DownloadObjectIntegTests: XCTestCase {
         withOutputStream outputStream: OutputStream
     ) async throws {
         let s3tmConfig = try await S3TransferManagerConfig(
-            s3ClientConfig: S3Client.S3ClientConfiguration(region: region),
+            s3ClientConfig: S3Client.S3ClientConfig(region: region),
             multipartDownloadType: downloadType
         )
         let s3tm = S3TransferManager(config: s3tmConfig)
@@ -225,7 +225,7 @@ class DownloadObjectIntegTests: XCTestCase {
 
         // Create S3TM instance to use for test.
         let s3tmConfig = try await S3TransferManagerConfig(
-            s3ClientConfig: S3Client.S3ClientConfiguration(region: region),
+            s3ClientConfig: S3Client.S3ClientConfig(region: region),
             multipartDownloadType: downloadType
         )
         let s3tm = S3TransferManager(config: s3tmConfig)
@@ -268,7 +268,7 @@ class DownloadObjectIntegTests: XCTestCase {
             // Object doesn't exist; generate file with specified size & upload it to bucket using S3TM.
             let fileURL = try generateLargePatternedDataFile(sourceFileName: sourceFileName, numBytes: numBytes)
             let s3tmConfig = try await S3TransferManagerConfig(
-                s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
+                s3ClientConfig: S3Client.S3ClientConfig(region: region)
             )
             let s3tm = S3TransferManager(config: s3tmConfig)
             _ = try await s3tm.uploadObject(input: UploadObjectInput(

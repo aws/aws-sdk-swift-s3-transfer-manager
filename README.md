@@ -69,7 +69,7 @@ Or you could pass the config object to the initializer to customize S3TM by doin
 
 ```swift
 // Create the custom S3 client config that you want S3TM to use.
-let customS3ClientConfig = try S3Client.S3ClientConfiguration(
+let customS3ClientConfig = try S3Client.S3ClientConfig(
     region: "us-west-2",
     . . . custom S3 client configurations . . .
 )
