@@ -29,7 +29,7 @@ class ConcurrentUploadObjectIntegTests: XCTestCase {
     override func setUp() async throws {
         s3 = try S3Client(region: region)
         tm = try await S3TransferManager(config: S3TransferManagerConfig(
-            s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
+            s3ClientConfig: S3Client.S3ClientConfig(region: region)
         ))
         let uuid = UUID().uuidString.split(separator: "-").first!.lowercased()
 

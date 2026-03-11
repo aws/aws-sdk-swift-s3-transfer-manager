@@ -16,7 +16,7 @@ public class S3TransferManagerConfig {
     // The underlying S3 client to which all operations will be routed to by TM.
     internal let s3Client: S3Client
     /// The S3 client config used to instantiate the S3 client `S3TransferManager` will use to make requests.
-    let s3ClientConfig: S3Client.S3ClientConfiguration
+    private(set) var s3ClientConfig: S3Client.S3ClientConfig
     /// The part size used by multipart transfer operations. I.e., determines part size when uploading a file to an S3 bucket that exceed `multipartUploadThresholdBytes`, or when downloading an S3 object from an S3 bucket that exceed `targetPartSizeBytes`.
     let targetPartSizeBytes: Int
     /// The threshold for multipart uploads. All files bigger than this threshold will be uploaded using S3's multipart upload API.
@@ -41,7 +41,7 @@ public class S3TransferManagerConfig {
     ///    - multipartDownloadType: Specifies the behavior of multipart download operations. Default value is `.part`, which configures individual `getObject` calls to use part numbers for multipart downloads. The other option is `.range`, which uses the byte range of the S3 object for multipart downloads. If what you want to download was uploaded without using multipart upload (therefore there's no part number available), then you should use `.range`.
     ///    - maxInMemoryBytes: Specifies the maximum number of bytes of parts held in memory for the S3TransferManager instance. Default vaule is 6GB for macOS and Linux, 500MB for iOS and tvOS, and 50MB for watchOS. Note that acutal memory usage of S3TransferManager instance can be greater, as this value only limits number of bytes held in memory during upload and download.
     public init(
-        s3ClientConfig: S3Client.S3ClientConfiguration? = nil,
+        s3ClientConfig: S3Client.S3ClientConfig? = nil,
         targetPartSizeBytes: Int = 8 * 1024 * 1024,
         multipartUploadThresholdBytes: Int = 16 * 1024 * 1024,
         requestChecksumCalculation: AWSChecksumCalculationMode = .whenSupported,
@@ -53,7 +53,7 @@ public class S3TransferManagerConfig {
         if let s3ClientConfig {
             self.s3ClientConfig = s3ClientConfig
         } else {
-            self.s3ClientConfig = try await S3Client.S3ClientConfiguration()
+            self.s3ClientConfig = try await S3Client.S3ClientConfig()
         }
         // Override checksum behavior configurations in passed in `s3ClientConfig` with
         //  checksum behavior configurations passed directly to TM.
