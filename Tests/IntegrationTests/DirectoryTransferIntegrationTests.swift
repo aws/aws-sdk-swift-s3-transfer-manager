@@ -23,7 +23,7 @@ class DirectoryTransferIntegrationTests: XCTestCase {
     let bucketNamePrefix = "s3tm-directory-transfer-integ-test-"
 
     override func setUp() async throws {
-        let s3ClientConfig = try await S3Client.S3ClientConfiguration(region: region)
+        var s3ClientConfig = try await S3Client.S3ClientConfig(region: region)
         s3ClientConfig.httpClientConfiguration.maxConnections = 20
         let tmConfig = try await S3TransferManagerConfig(
             s3ClientConfig: s3ClientConfig,

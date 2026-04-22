@@ -26,7 +26,7 @@ class UploadObjectIntegTests: XCTestCase {
         Task {
             do {
                 tm = try await S3TransferManager(config: S3TransferManagerConfig(
-                    s3ClientConfig: S3Client.S3ClientConfiguration(region: region)
+                    s3ClientConfig: try S3Client.S3ClientConfig(region: region)
                 ))
                 tmSetupExpectation.fulfill()
             } catch {
