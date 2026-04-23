@@ -21,7 +21,7 @@ import struct Smithy.SwiftLogger
 /// All operations return immediately with a `Task` that can be optionally waited on for the operation output.
 ///
 /// For information on what options there are for each operation, go to the input type documentations (e.g., `UploadObjectInput`).
-public class S3TransferManager {
+public final class S3TransferManager: Sendable {
     internal let config: S3TransferManagerConfig
     internal let logger: SwiftLogger
     internal let concurrencyManager: S3TMConcurrencyManager

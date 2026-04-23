@@ -39,7 +39,7 @@ class ConcurrentDownloadObjectIntegTests: XCTestCase {
 
     override func setUp() async throws {
         let tmConfig = try await S3TransferManagerConfig(
-            s3ClientConfig: S3Client.S3ClientConfiguration(region: region),
+            s3ClientConfig: try S3Client.S3ClientConfig(region: region),
             multipartDownloadType: .range
         )
         tm = S3TransferManager(config: tmConfig)
