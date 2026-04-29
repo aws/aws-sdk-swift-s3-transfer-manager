@@ -5,14 +5,6 @@
 [apache-badge]: https://img.shields.io/badge/License-Apache%202.0-blue.svg
 [apache-url]: LICENSE
 
-## ⚠️ Developer Preview
-
-This library is currently in developer preview and is NOT recommended for production environments.
-
-It is meant for early access and feedback gathering at this time. We'd love to hear from you on use cases, feature prioritization, and API feedback.
-
-See the AWS SDK and Tools [maintenance policy descriptions](https://docs.aws.amazon.com/sdkref/latest/guide/maint-policy.html#version-life-cycle) for more information.
-
 ## Overview
 
 The Amazon S3 Transfer Manager for Swift (S3TM for short) is a high-level library built on top of the [AWS Swift SDK S3 client](https://github.com/awslabs/aws-sdk-swift/blob/main/Sources/Services/AWSS3/Sources/AWSS3/S3Client.swift). It provides an intuitive transfer API for reliable and performant data transfer between your Swift application and Amazon S3, as well as the ability to monitor the progress of the transfers in real-time.
