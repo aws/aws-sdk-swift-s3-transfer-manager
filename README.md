@@ -1,4 +1,4 @@
-# Amazon S3 Transfer Manager for Swift
+# AWS SDK for Swift's Transfer Manager for Amazon S3
 
 [![License][apache-badge]][apache-url]
 
@@ -7,7 +7,7 @@
 
 ## Overview
 
-The Amazon S3 Transfer Manager for Swift (S3TM for short) is a high-level library built on top of the [AWS Swift SDK S3 client](https://github.com/awslabs/aws-sdk-swift/blob/main/Sources/Services/AWSS3/Sources/AWSS3/S3Client.swift). It provides an intuitive transfer API for reliable and performant data transfer between your Swift application and Amazon S3, as well as the ability to monitor the progress of the transfers in real-time.
+The AWS SDK for Swift's Transfer Manager for Amazon S3 (S3TM for short) is a high-level library built on top of the [AWS Swift SDK S3 client](https://github.com/awslabs/aws-sdk-swift/blob/main/Sources/Services/AWSS3/Sources/AWSS3/S3Client.swift). It provides an intuitive transfer API for reliable and performant data transfer between your Swift application and Amazon S3, as well as the ability to monitor the progress of the transfers in real-time.
 
 There are 4 transfer operations supported by S3TM:
 
@@ -80,7 +80,7 @@ let s3tm = S3TransferManager(config: s3tmConfig)
 
 For more information on what each configuration does, please refer to [the documentation comments on S3TransferManagerConfig](https://github.com/aws/aws-sdk-swift-s3-transfer-manager/blob/main/Sources/S3TransferManager/S3TransferManagerConfig.swift).
 
-## Amazon S3 Transfer Manager for Swift usage examples
+## AWS SDK for Swift's Transfer Manager for Amazon S3 usage examples
 
 ### Upload an object
 
@@ -167,7 +167,7 @@ let downloadBucketOutput = try await downloadBucketTask.value
 
 ### Monitor transfer progress
 
-You can optionally configure transfer listeners for any of the S3TM operations above. The Amazon S3 Transfer Manager for Swift provides 2 canned transfer progress listeners for you. They’re `LoggingTransferListener`s and `StreamingTransferListener`s. There's a specific listener type for each operation, e.g., `UploadObjectLoggingTransferListener` is a `LoggingTransferListener` for the single object upload operation.
+You can optionally configure transfer listeners for any of the S3TM operations above. The AWS SDK for Swift's Transfer Manager for Amazon S3 provides 2 canned transfer progress listeners for you. They’re `LoggingTransferListener`s and `StreamingTransferListener`s. There's a specific listener type for each operation, e.g., `UploadObjectLoggingTransferListener` is a `LoggingTransferListener` for the single object upload operation.
 
 The `LoggingTransferListener`s log transfer events to the console using [swift-log](https://github.com/apple/swift-log). The `StreamingTransferListener`s publish transfer events to its `AsyncThrowingStream` instance property, which can be awaited on to consume and handle events as needed. You can configure any number of transfer listeners for the S3TM operations via their inputs (e.g., `UploadObjectInput`'s `transferListeners` field). You can add your own custom transfer listeners as well, by implementing a struct or a class that conforms to the `TransferListener` protocol and configuring it in the input structs.
 
