@@ -46,6 +46,19 @@ class UploadObjectUnitTests: S3TMUnitTestCase {
         }
     }
 
+    // MARK: - derivePutObjectInput tests.
+
+    func testDerivePutObjectInputForwardsMetadata() {
+        let uploadObjectInput = UploadObjectInput(
+            body: .noStream,
+            bucket: "my-bucket",
+            key: "my-key",
+            metadata: ["x-custom-key": "custom-value"]
+        )
+        let putObjectInput = uploadObjectInput.derivePutObjectInput()
+        XCTAssertEqual(putObjectInput.metadata, ["x-custom-key": "custom-value"])
+    }
+
     // MARK: - readPartData tests.
 
     func testReadPartDataDataBody() async throws {
