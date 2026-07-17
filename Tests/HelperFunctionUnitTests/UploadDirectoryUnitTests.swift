@@ -80,10 +80,11 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
 
     func testGetDirectlyNestedURLsDoesNotEscapeSourceForPercentEncodedName() throws {
         let fm = FileManager.default
-        let sourceURL = fm.temporaryDirectory.appendingPathComponent("UploadTraversal-\(UUID().uuidString)/source", isDirectory: true)
+        let rootURL = fm.temporaryDirectory.appendingPathComponent("UploadTraversal-\(UUID().uuidString)")
+        let sourceURL = rootURL.appendingPathComponent("source", isDirectory: true)
         try fm.createDirectory(at: sourceURL, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: sourceURL.deletingLastPathComponent()) }
-        fm.createFile(atPath: sourceURL.deletingLastPathComponent().appendingPathComponent("secret.txt").path, contents: nil)
+        defer { try? fm.removeItem(at: rootURL) }
+        fm.createFile(atPath: rootURL.appendingPathComponent("secret.txt").path, contents: nil)
         fm.createFile(atPath: sourceURL.appendingPathComponent("%2E%2E").path, contents: nil)
 
         let fetchedURLs = try UploadDirectoryUnitTests.tm.getDirectlyNestedURLs(in: sourceURL, isSymlink: false)
