@@ -70,6 +70,13 @@ jobs:
             restore-keys: |
               1-${{ runner.os }}-${{ matrix.xcode }}-${{ hashFiles('Package.swift') }}
               1-${{ runner.os }}-${{ matrix.xcode }}-
+        - name: Trust Swift package plugins
+          run: |
+            # Non-interactive CI must opt in to build-tool plugins (e.g. smithy-swift's
+            # SmithyCodeGeneratorPlugin); otherwise xcodebuild fails with
+            # "Plugin ... must be enabled before it can be used" before any test runs.
+            defaults write com.apple.dt.Xcode IDESkipPackagePluginFingerprintValidatation -bool YES
+            defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
         - name: Resolve Package Dependencies
           run: |
             cd aws-sdk-swift-s3-transfer-manager
@@ -88,6 +95,8 @@ jobs:
               -destination '${{ matrix.destination }}' \
               -only-testing:S3TransferManagerUnitTests \
               -resultBundlePath UnitTests.xcresult \
+              -skipPackagePluginValidation \
+              -skipMacroValidation \
               test 2>&1 \
               | xcbeautify
         - name: Surface test failures
