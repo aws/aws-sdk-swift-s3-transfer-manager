@@ -131,8 +131,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: jammy
-            version: "5.9"
           - os: noble
             version: "6.3"
     steps:
