@@ -88,41 +88,13 @@ jobs:
         - name: Build and Run Unit Tests
           run: |
             cd aws-sdk-swift-s3-transfer-manager
-            rm -rf UnitTests.xcresult
             set -o pipefail && \
             NSUnbufferedIO=YES xcodebuild \
               -scheme aws-sdk-swift-s3-transfer-manager \
               -destination '${{ matrix.destination }}' \
               -only-testing:S3TransferManagerUnitTests \
-              -resultBundlePath UnitTests.xcresult \
-              -skipPackagePluginValidation \
-              -skipMacroValidation \
               test 2>&1 \
               | xcbeautify
-        - name: Surface test failures
-          if: ${{ failure() }}
-          run: |
-            cd aws-sdk-swift-s3-transfer-manager
-            if [ ! -d UnitTests.xcresult ]; then
-              echo "No result bundle produced (failure occurred before tests ran, e.g. dependency resolution or build)."
-              exit 0
-            fi
-            echo "::group::Failing test assertions (test-results summary)"
-            xcrun xcresulttool get test-results summary --path UnitTests.xcresult 2>/dev/null || true
-            echo "::endgroup::"
-            echo "::group::Failure messages (raw)"
-            # Works across Xcode versions: dump JSON and print any failure/assertion messages.
-            xcrun xcresulttool get --legacy --path UnitTests.xcresult --format json 2>/dev/null \
-              | grep -oE '"(message|testStatus|identifier)"[^,}]*' | sort -u \
-              || xcrun xcresulttool get --path UnitTests.xcresult --format json 2>/dev/null | head -c 20000
-            echo "::endgroup::"
-        - name: Upload xcresult bundle
-          if: ${{ failure() }}
-          uses: actions/upload-artifact@v4
-          with:
-            name: UnitTests-${{ matrix.runner }}-${{ matrix.xcode }}-${{ strategy.job-index }}.xcresult
-            path: aws-sdk-swift-s3-transfer-manager/UnitTests.xcresult
-            if-no-files-found: ignore
 
   linux:
     runs-on: ubuntu-latest
