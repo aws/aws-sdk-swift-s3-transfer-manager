@@ -130,10 +130,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - jammy
-        version:
-          - "6.0"
+        include:
+          - os: jammy
+            version: "5.9"
+          - os: noble
+            version: "6.3"
     steps:
       - name: Checkout aws-sdk-swift-s3-transfer-manager
         uses: actions/checkout@v4

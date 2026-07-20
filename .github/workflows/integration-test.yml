@@ -113,13 +113,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner:
-          - ubuntu-24.04
-          - ubuntu-24.04-arm
-        os:
-          - jammy
-        version:
-          - "5.9"
+        include:
+          - runner: ubuntu-24.04
+            os: jammy
+            version: "5.9"
+          - runner: ubuntu-24.04-arm
+            os: jammy
+            version: "5.9"
+          - runner: ubuntu-24.04
+            os: noble
+            version: "6.3"
+          - runner: ubuntu-24.04-arm
+            os: noble
+            version: "6.3"
     steps:
       - name: Configure AWS Credentials for Integration Tests
         uses: aws-actions/configure-aws-credentials@v4
