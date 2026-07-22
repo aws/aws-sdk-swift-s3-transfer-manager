@@ -28,7 +28,13 @@ class S3TMUnitTestCase: XCTestCase {
                 fatalError("Failed to set up S3 Transfer Manager: \(error)")
             }
         }
-        _ = XCTWaiter().wait(for: [tmSetupExpectation], timeout: 5)
+        // Wait generously: on a cold simulator (notably the newest iOS/visionOS runtimes) the
+        // first setup can take well over 5s. Fail loudly if it doesn't finish rather than
+        // continuing with a nil `tm`, which would surface later as a confusing force-unwrap crash.
+        let waitResult = XCTWaiter().wait(for: [tmSetupExpectation], timeout: 120)
+        guard waitResult == .completed, tm != nil else {
+            fatalError("S3 Transfer Manager was not initialized before timeout (wait result: \(waitResult)).")
+        }
         downloadBucketTestsResourcesURL = setUpDirectoryForDownloadBucketUnitTests()
         uploadDirectoryTestsResourcesURL = setUpDirectoryForUploadDirectoryTests()
     }
