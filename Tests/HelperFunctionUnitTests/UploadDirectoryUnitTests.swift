@@ -78,6 +78,26 @@ class UploadDirectoryUnitTests: S3TMUnitTestCase {
         XCTAssertEqual(Set(fetchedURLs), expectedURLs)
     }
 
+    func testGetDirectlyNestedURLsDoesNotEscapeSourceForPercentEncodedName() throws {
+        let fm = FileManager.default
+        let rootURL = fm.temporaryDirectory.appendingPathComponent("UploadTraversal-\(UUID().uuidString)")
+        let sourceURL = rootURL.appendingPathComponent("source", isDirectory: true)
+        try fm.createDirectory(at: sourceURL, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: rootURL) }
+        fm.createFile(atPath: rootURL.appendingPathComponent("secret.txt").path, contents: nil)
+        fm.createFile(atPath: sourceURL.appendingPathComponent("%2E%2E").path, contents: nil)
+
+        let fetchedURLs = try UploadDirectoryUnitTests.tm.getDirectlyNestedURLs(in: sourceURL, isSymlink: false)
+
+        let sourcePath = sourceURL.standardizedFileURL.path
+        for url in fetchedURLs {
+            XCTAssertTrue(
+                url.standardizedFileURL.path.hasPrefix(sourcePath),
+                "Resolved URL \(url.standardizedFileURL.path) escaped the source directory \(sourcePath)."
+            )
+        }
+    }
+
     // MARK: - discoverFilesProgressively tests.
 
     /*

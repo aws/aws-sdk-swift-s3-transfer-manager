@@ -53,36 +53,58 @@ class DownloadBucketUnitTests: S3TMUnitTestCase {
         try FileManager.default.removeItem(at: tempDir.appendingPathComponent("\(uuid)/"))
     }
 
-    // MARK: - filePathEscapesDestination tests.
+    // MARK: - fileURLEscapesDestination tests.
 
-    func testFilePathEscapesDestinationFalse1() {
-        let filePath = "a.txt"
-        XCTAssertFalse(DownloadBucketUnitTests.tm.filePathEscapesDestination(filePath: filePath))
+    private static let escapeTestDestination = URL(fileURLWithPath: "/tmp/poc/dest/", isDirectory: true)
+
+    private func assertEscapes(_ relativeFilePath: String, _ expected: Bool, line: UInt = #line) {
+        let destination = DownloadBucketUnitTests.escapeTestDestination
+        let resolvedFileURL = URL(string: destination.absoluteString.appendingPathComponent(relativeFilePath))!
+        XCTAssertEqual(
+            DownloadBucketUnitTests.tm.fileURLEscapesDestination(fileURL: resolvedFileURL, destination: destination),
+            expected,
+            line: line
+        )
     }
 
-    func testFilePathEscapesDestinationFalse2() {
-        let filePath = "dir1/../dir2/../a.txt"
-        XCTAssertFalse(DownloadBucketUnitTests.tm.filePathEscapesDestination(filePath: filePath))
+    func testFileURLEscapesDestinationFalse1() {
+        assertEscapes("a.txt", false)
     }
 
-    func testFilePathEscapesDestinationFalse3() {
-        let filePath = "dir1/dir2/../../dir3/a.txt"
-        XCTAssertFalse(DownloadBucketUnitTests.tm.filePathEscapesDestination(filePath: filePath))
+    func testFileURLEscapesDestinationFalse2() {
+        assertEscapes("dir1/../dir2/../a.txt", false)
     }
 
-    func testFilePathEscapesDestinationTrue1() {
-        let filePath = "../a.txt"
-        XCTAssertTrue(DownloadBucketUnitTests.tm.filePathEscapesDestination(filePath: filePath))
+    func testFileURLEscapesDestinationFalse3() {
+        assertEscapes("dir1/dir2/../../dir3/a.txt", false)
     }
 
-    func testFilePathEscapesDestinationTrue2() {
-        let filePath = "dir1/../../a.txt"
-        XCTAssertTrue(DownloadBucketUnitTests.tm.filePathEscapesDestination(filePath: filePath))
+    func testFileURLEscapesDestinationTrue1() {
+        assertEscapes("../a.txt", true)
     }
 
-    func testFilePathEscapesDestinationTrue3() {
-        let filePath = "dir1/dir2/../dir3/../../../a.txt"
-        XCTAssertTrue(DownloadBucketUnitTests.tm.filePathEscapesDestination(filePath: filePath))
+    func testFileURLEscapesDestinationTrue2() {
+        assertEscapes("dir1/../../a.txt", true)
+    }
+
+    func testFileURLEscapesDestinationTrue3() {
+        assertEscapes("dir1/dir2/../dir3/../../../a.txt", true)
+    }
+
+    func testFileURLEscapesDestinationRejectsDotPaddedTraversal() {
+        assertEscapes("legit/./../../evil", true)
+    }
+
+    func testFileURLEscapesDestinationRejectsEmptySegmentTraversal() {
+        assertEscapes("x//../../canary.txt", true)
+    }
+
+    func testFileURLEscapesDestinationRejectsPercentEncodedTraversal() {
+        assertEscapes("%2e%2e/evil", true)
+    }
+
+    func testFileURLEscapesDestinationAllowsDoubleEncodedLiteral() {
+        assertEscapes("%252e%252e/x.txt", false)
     }
 
     // MARK: - createFile tests.
