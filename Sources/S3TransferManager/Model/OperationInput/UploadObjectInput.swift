@@ -259,6 +259,7 @@ public struct UploadObjectInput: Sendable, Identifiable {
             checksumSHA256: self.checksumSHA256,
             expectedBucketOwner: self.expectedBucketOwner,
             key: self.key,
+            metadata: self.metadata,
             requestPayer: self.requestPayer,
             sseCustomerAlgorithm: self.sseCustomerAlgorithm,
             sseCustomerKey: self.sseCustomerKey,
