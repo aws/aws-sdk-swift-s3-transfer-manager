@@ -189,12 +189,13 @@ public extension S3TransferManager {
 
         let relativeFilePath = originalKey.removePrefix(input.s3Prefix ?? "")
 
-        // If relativeFilePath escapes destination directory, skip it
-        if filePathEscapesDestination(filePath: relativeFilePath) {
+        let resolvedFileURL = URL(string: input.destination.absoluteString.appendingPathComponent(relativeFilePath))!
+
+        // If resolvedFileURL escapes destination directory, skip it
+        if fileURLEscapesDestination(fileURL: resolvedFileURL, destination: input.destination) {
             return nil
         }
 
-        let resolvedFileURL = URL(string: input.destination.absoluteString.appendingPathComponent(relativeFilePath))!
         let tempFileURL = try createDestinationFile(originalURL: resolvedFileURL)
 
         return (originalKey, tempFileURL)
@@ -322,21 +323,12 @@ public extension S3TransferManager {
         }
     }
 
-    internal func filePathEscapesDestination(filePath: String) -> Bool {
-        let pathComponents = filePath.components(separatedBy: defaultPathSeparator())
-        var nestedLevel = 0
-        for component in pathComponents {
-            if component == ".." {
-                nestedLevel -= 1
-            } else {
-                nestedLevel += 1
-            }
-            // If at any point we go outside of destination directory (negative level), return true. It _could_ come back into destination directory, but we just return as soon as it escapes for simplicity.
-            if nestedLevel < 0 {
-                return true
-            }
-        }
-        return false
+    internal func fileURLEscapesDestination(fileURL: URL, destination: URL) -> Bool {
+        // Require the resolved file path to be strictly nested under the resolved destination.
+        let destinationComponents = destination.standardizedFileURL.pathComponents
+        let fileComponents = fileURL.standardizedFileURL.pathComponents
+        return !(fileComponents.starts(with: destinationComponents)
+            && fileComponents.count > destinationComponents.count)
     }
 
     internal func createFile(at url: URL) throws {

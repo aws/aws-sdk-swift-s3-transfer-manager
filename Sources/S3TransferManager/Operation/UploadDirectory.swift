@@ -213,8 +213,10 @@ public extension S3TransferManager {
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey]
         )
         return directlyNestedURLs.map {
-            // Swap the base URL.
-            URL(string: originalDirURL.absoluteString.appendingPathComponent($0.lastPathComponent))!
+            // Swap the base URL. Percent-encode the file name so `URL(string:)` does not decode it again.
+            let encodedComponent = $0.lastPathComponent
+                .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? $0.lastPathComponent
+            return URL(string: originalDirURL.absoluteString.appendingPathComponent(encodedComponent))!
         }
     }
 
